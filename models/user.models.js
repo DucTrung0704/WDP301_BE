@@ -1,0 +1,61 @@
+const mongoose = require("mongoose");
+
+const userSchema = new mongoose.Schema(
+    {
+        //Identity
+        email: {
+            type: String,
+            required: true,
+            lowercase: true,
+            trim: true,
+            unique: true,
+            index: true,
+        },
+
+        password: {
+            type: String,
+            select: false, // không trả password khi query
+        },
+
+        //Providers
+        providers: {
+            local: {
+                type: Boolean,
+                default: false,
+            },
+            google: {
+                id: String,
+                email: String,
+            },
+        },
+
+        //Profile
+        profile: {
+            fullName: String,
+            avatar: String,
+            phone: String,
+        },
+
+        //Authorization
+        role: {
+            type: String,
+            enum: ["user", "admin"],
+            default: "user",
+        },
+
+        //Account status
+        status: {
+            type: String,
+            enum: ["active", "inactive", "banned"],
+            default: "active",
+        },
+
+        //Audit
+        lastLoginAt: Date,
+    },
+    {
+        timestamps: true,
+    }
+);
+
+module.exports = mongoose.model("User", userSchema);
