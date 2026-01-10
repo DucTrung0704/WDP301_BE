@@ -4,6 +4,8 @@ var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 var mongoose = require('mongoose');
+var swaggerUi = require('swagger-ui-express');
+var swaggerSpec = require('./swagger.config');
 require('dotenv').config();
 
 var app = express();
@@ -29,6 +31,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
+
+/* =========================
+   SWAGGER DOCUMENTATION
+========================= */
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'WDP301 API Documentation'
+}));
 
 /* =========================
    ROUTES
