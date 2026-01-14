@@ -19,10 +19,10 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err => console.error("MongoDB error:", err));
 
 /* =========================
-   VIEW ENGINE SETUP
+   VIEW ENGINE SETUP (Pug)
 ========================= */
 app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'jade');
+app.set('view engine', 'pug');
 
 /* =========================
    MIDDLEWARE
