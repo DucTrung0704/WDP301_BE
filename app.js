@@ -6,6 +6,7 @@ var logger = require('morgan');
 var mongoose = require('mongoose');
 var swaggerUi = require('swagger-ui-express');
 var swaggerSpec = require('./swagger.config');
+var cors = require('cors');
 require('dotenv').config();
 
 var app = express();
@@ -14,7 +15,7 @@ var app = express();
    DATABASE CONNECTION
 ========================= */
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
+  .then(() => console.log("MongoDB connected!!"))
   .catch(err => console.error("MongoDB error:", err));
 
 /* =========================
@@ -26,6 +27,14 @@ app.set('view engine', 'jade');
 /* =========================
    MIDDLEWARE
 ========================= */
+// CORS Configuration
+app.use(cors({
+   origin: process.env.CORS_ORIGIN || '*', //CORS_ORIGIN=http://localhost:5713
+  credentials: true, 
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+}));
+
 app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -44,6 +53,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
    ROUTES
 ========================= */
 app.use('/api/auth', require('./routes/auth.routes')); // login / register
+app.use('/api/admin', require('./routes/admin.routes')); // admin CRUD accounts
 
 /* =========================
    404 HANDLER

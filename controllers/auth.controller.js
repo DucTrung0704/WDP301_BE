@@ -42,7 +42,7 @@ exports.googleLogin = async (req, res) => {
         let user = await User.findOne({ email });
 
         if (!user) {
-            // 👉 REGISTER new user by Google
+            // 👉 REGISTER new user by Google (default role: Individual Operator)
             user = await User.create({
                 email,
                 providers: {
@@ -53,6 +53,7 @@ exports.googleLogin = async (req, res) => {
                     fullName: name,
                     avatar: picture,
                 },
+                role: "INDIVIDUAL_OPERATOR",
                 status: "active",
             });
         } else {
@@ -63,6 +64,16 @@ exports.googleLogin = async (req, res) => {
                 user.profile.avatar = user.profile.avatar || picture;
                 await user.save();
             }
+        }
+
+        // ✅ Normalize legacy role to new enum
+        const allowedRoles = [
+            "UTM_ADMIN",
+            "INDIVIDUAL_OPERATOR",
+            "FLEET_OPERATOR",
+        ];
+        if (!allowedRoles.includes(user.role)) {
+            user.role = "INDIVIDUAL_OPERATOR";
         }
 
         if (user.status !== "active") {
@@ -95,7 +106,7 @@ exports.googleLogin = async (req, res) => {
  */
 exports.register = async (req, res) => {
     try {
-        const { email, password, fullName } = req.body;
+        const { email, password, fullName, role } = req.body;
 
         if (!email || !password) {
             return res.status(400).json({ message: "Missing fields" });
@@ -106,6 +117,20 @@ exports.register = async (req, res) => {
             return res.status(409).json({ message: "Email already exists" });
         }
 
+        // ✅ Validate role (if provided) - chỉ cho phép 2 role ngoài UTM_ADMIN
+        const allowedRoles = ["INDIVIDUAL_OPERATOR", "FLEET_OPERATOR"];
+
+        let userRole = "INDIVIDUAL_OPERATOR";
+        if (role) {
+            if (!allowedRoles.includes(role)) {
+                return res.status(400).json({
+                    message:
+                        "Invalid role. Allowed: INDIVIDUAL_OPERATOR, FLEET_OPERATOR",
+                });
+            }
+            userRole = role;
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const user = await User.create({
@@ -113,6 +138,7 @@ exports.register = async (req, res) => {
             password: hashedPassword,
             providers: { local: true },
             profile: { fullName },
+            role: userRole,
         });
 
         const token = jwt.sign(
@@ -142,6 +168,16 @@ exports.login = async (req, res) => {
 
         if (!user || !user.providers.local) {
             return res.status(401).json({ message: "Invalid credentials" });
+        }
+
+        // ✅ Normalize legacy role to new enum
+        const allowedRoles = [
+            "UTM_ADMIN",
+            "INDIVIDUAL_OPERATOR",
+            "FLEET_OPERATOR",
+        ];
+        if (!allowedRoles.includes(user.role)) {
+            user.role = "INDIVIDUAL_OPERATOR";
         }
 
         if (user.status !== "active") {

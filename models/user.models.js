@@ -14,7 +14,7 @@ const userSchema = new mongoose.Schema(
 
         password: {
             type: String,
-            select: false, // không trả password khi query
+            select: false, 
         },
 
         //Providers
@@ -39,8 +39,12 @@ const userSchema = new mongoose.Schema(
         //Authorization
         role: {
             type: String,
-            enum: ["user", "admin"],
-            default: "user",
+            enum: [
+                "UTM_ADMIN",            
+                "INDIVIDUAL_OPERATOR",  
+                "FLEET_OPERATOR",       
+            ],
+            default: "INDIVIDUAL_OPERATOR",
         },
 
         //Account status

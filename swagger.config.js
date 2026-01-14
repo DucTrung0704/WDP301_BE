@@ -29,6 +29,33 @@ const options = {
         },
       },
       schemas: {
+        User: {
+          type: 'object',
+          properties: {
+            _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
+            email: { type: 'string', example: 'user@example.com' },
+            profile: {
+              type: 'object',
+              properties: {
+                fullName: { type: 'string', example: 'John Doe' },
+                avatar: { type: 'string', example: 'https://example.com/avatar.jpg' },
+              },
+            },
+            role: {
+              type: 'string',
+              enum: ['UTM_ADMIN', 'INDIVIDUAL_OPERATOR', 'FLEET_OPERATOR'],
+              example: 'INDIVIDUAL_OPERATOR',
+              description: 'User role: UTM_ADMIN, INDIVIDUAL_OPERATOR, or FLEET_OPERATOR',
+            },
+            status: {
+              type: 'string',
+              enum: ['active', 'inactive', 'banned'],
+              example: 'active',
+            },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
         RegisterRequest: {
           type: 'object',
           required: ['email', 'password'],
@@ -50,6 +77,12 @@ const options = {
               type: 'string',
               example: 'John Doe',
               description: 'Full name of the user (optional)',
+            },
+            role: {
+              type: 'string',
+              enum: ['INDIVIDUAL_OPERATOR', 'FLEET_OPERATOR'],
+              example: 'INDIVIDUAL_OPERATOR',
+              description: 'Optional. User role when self-registering (cannot be UTM_ADMIN)',
             },
           },
         },
@@ -78,48 +111,7 @@ const options = {
               description: 'JWT token for authentication',
             },
             user: {
-              type: 'object',
-              properties: {
-                _id: {
-                  type: 'string',
-                  example: '507f1f77bcf86cd799439011',
-                },
-                email: {
-                  type: 'string',
-                  example: 'user@example.com',
-                },
-                profile: {
-                  type: 'object',
-                  properties: {
-                    fullName: {
-                      type: 'string',
-                      example: 'John Doe',
-                    },
-                    avatar: {
-                      type: 'string',
-                      example: 'https://example.com/avatar.jpg',
-                    },
-                  },
-                },
-                role: {
-                  type: 'string',
-                  enum: ['user', 'admin'],
-                  example: 'user',
-                },
-                status: {
-                  type: 'string',
-                  enum: ['active', 'inactive', 'banned'],
-                  example: 'active',
-                },
-                createdAt: {
-                  type: 'string',
-                  format: 'date-time',
-                },
-                updatedAt: {
-                  type: 'string',
-                  format: 'date-time',
-                },
-              },
+              $ref: '#/components/schemas/User',
             },
           },
         },

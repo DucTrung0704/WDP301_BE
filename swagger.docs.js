@@ -17,6 +17,7 @@
  *             email: "user@example.com"
  *             password: "password123"
  *             fullName: "John Doe"
+ *             role: "FLEET_OPERATOR"
  *     responses:
  *       201:
  *         description: Đăng ký thành công
@@ -31,7 +32,7 @@
  *                 email: "user@example.com"
  *                 profile:
  *                   fullName: "John Doe"
- *                 role: "user"
+ *                 role: "INDIVIDUAL_OPERATOR"
  *                 status: "active"
  *       400:
  *         description: Thiếu thông tin bắt buộc
@@ -88,7 +89,7 @@
  *                 email: "user@example.com"
  *                 profile:
  *                   fullName: "John Doe"
- *                 role: "user"
+ *                 role: "INDIVIDUAL_OPERATOR"
  *                 status: "active"
  *       401:
  *         description: Thông tin đăng nhập không hợp lệ
@@ -116,3 +117,178 @@
  *               message: "Login failed"
  */
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Admin
+ *     description: Quản lý tài khoản (chỉ UTM_ADMIN)
+ */
+
+/**
+ * @swagger
+ * /api/admin/users:
+ *   get:
+ *     summary: Danh sách tất cả người dùng (chỉ UTM_ADMIN)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/AuthResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Forbidden
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *
+ *   post:
+ *     summary: Tạo mới người dùng (chỉ UTM_ADMIN)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: "newuser@example.com"
+ *               password:
+ *                 type: string
+ *                 example: "password123"
+ *               fullName:
+ *                 type: string
+ *                 example: "New User"
+ *               role:
+ *                 type: string
+ *                 enum: [INDIVIDUAL_OPERATOR, FLEET_OPERATOR]
+ *                 example: "FLEET_OPERATOR"
+ *               status:
+ *                 type: string
+ *                 enum: [active, inactive, banned]
+ *                 example: "active"
+ *     responses:
+ *       201:
+ *         description: Created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       409:
+ *         description: Email exists
+ *
+ * /api/admin/users/{id}:
+ *   get:
+ *     summary: Xem chi tiết người dùng (chỉ UTM_ADMIN)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       404:
+ *         description: Not found
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *
+ *   put:
+ *     summary: Cập nhật người dùng (chỉ UTM_ADMIN)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               fullName:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *                 enum: [INDIVIDUAL_OPERATOR, FLEET_OPERATOR]
+ *               status:
+ *                 type: string
+ *                 enum: [active, inactive, banned]
+ *     responses:
+ *       200:
+ *         description: Updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Not found
+ *
+ *   delete:
+ *     summary: Xoá người dùng (chỉ UTM_ADMIN)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Deleted
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Not found*/
