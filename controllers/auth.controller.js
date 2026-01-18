@@ -18,7 +18,7 @@ exports.googleLogin = async (req, res) => {
             return res.status(400).json({ message: "Missing Google token" });
         }
 
-        // ✅ Verify token with Google
+        // Verify token with Google
         const ticket = await googleClient.verifyIdToken({
             idToken,
             audience: process.env.GOOGLE_CLIENT_ID,
@@ -38,7 +38,7 @@ exports.googleLogin = async (req, res) => {
             return res.status(401).json({ message: "Email not verified by Google" });
         }
 
-        // ✅ Check user exists
+        // Check user exists
         let user = await User.findOne({ email });
 
         if (!user) {
@@ -57,7 +57,7 @@ exports.googleLogin = async (req, res) => {
                 status: "active",
             });
         } else {
-            // 👉 Nếu user tồn tại nhưng chưa link Google
+            // Nếu user tồn tại nhưng chưa link Google
             if (!user.providers.google) {
                 user.providers.google = true;
                 user.googleId = googleId;
@@ -66,7 +66,7 @@ exports.googleLogin = async (req, res) => {
             }
         }
 
-        // ✅ Normalize legacy role to new enum
+        // Normalize legacy role to new enum
         const allowedRoles = [
             "UTM_ADMIN",
             "INDIVIDUAL_OPERATOR",
@@ -80,11 +80,11 @@ exports.googleLogin = async (req, res) => {
             return res.status(403).json({ message: "Account disabled" });
         }
 
-        // ✅ Update last login
+        // Update last login
         user.lastLoginAt = new Date();
         await user.save();
 
-        // ✅ Generate JWT
+        // Generate JWT
         const token = jwt.sign(
             { userId: user._id, role: user.role },
             process.env.JWT_SECRET,
@@ -117,7 +117,7 @@ exports.register = async (req, res) => {
             return res.status(409).json({ message: "Email already exists" });
         }
 
-        // ✅ Validate role (if provided) - chỉ cho phép 2 role ngoài UTM_ADMIN
+        // Validate role (if provided) - chỉ cho phép 2 role ngoài UTM_ADMIN
         const allowedRoles = ["INDIVIDUAL_OPERATOR", "FLEET_OPERATOR"];
 
         let userRole = "INDIVIDUAL_OPERATOR";
@@ -132,12 +132,14 @@ exports.register = async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
+        
+        const profileData = fullName ? { fullName } : {};
 
         const user = await User.create({
             email,
             password: hashedPassword,
             providers: { local: true },
-            profile: { fullName },
+            profile: profileData,
             role: userRole,
         });
 
@@ -170,7 +172,7 @@ exports.login = async (req, res) => {
             return res.status(401).json({ message: "Invalid credentials" });
         }
 
-        // ✅ Normalize legacy role to new enum
+        // Normalize legacy role to new enum
         const allowedRoles = [
             "UTM_ADMIN",
             "INDIVIDUAL_OPERATOR",

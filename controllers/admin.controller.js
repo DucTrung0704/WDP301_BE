@@ -7,7 +7,7 @@ const bcrypt = require("bcryptjs");
  */
 exports.getAllUsers = async (req, res) => {
     try {
-         const users = await User.find(); 
+        const users = await User.find();
         res.json(users);
     } catch (err) {
         console.error("getAllUsers error:", err);
@@ -22,7 +22,7 @@ exports.getAllUsers = async (req, res) => {
 exports.getUserById = async (req, res) => {
     try {
         const { id } = req.params;
-         const user = await User.findById(id); 
+        const user = await User.findById(id);
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
@@ -64,11 +64,14 @@ exports.createUserByAdmin = async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        // Đảm bảo profile object luôn được tạo đúng cách (kể cả khi rỗng)
+        const profileData = fullName ? { fullName } : {};
+
         const user = await User.create({
             email,
             password: hashedPassword,
             providers: { local: true },
-            profile: { fullName },
+            profile: profileData,
             role: role || "INDIVIDUAL_OPERATOR",
             status: status || "active",
         });
@@ -130,7 +133,7 @@ exports.updateUserByAdmin = async (req, res) => {
             if (!allowedRoles.includes(role)) {
                 return res.status(400).json({
                     message:
-                         "Invalid role. Allowed: INDIVIDUAL_OPERATOR, FLEET_OPERATOR",
+                        "Invalid role. Allowed: INDIVIDUAL_OPERATOR, FLEET_OPERATOR",
                 });
             }
             user.role = role;
