@@ -76,7 +76,11 @@ exports.createUserByAdmin = async (req, res) => {
             status: status || "active",
         });
 
-        res.status(201).json(user);
+        res.status(201).json({
+            data: {
+                user,
+            }
+        });
     } catch (err) {
         console.error("createUserByAdmin error:", err);
         res.status(500).json({ message: "Failed to create user" });
@@ -141,7 +145,11 @@ exports.updateUserByAdmin = async (req, res) => {
 
         await user.save();
 
-        res.json(user);
+        res.json({
+            data: {
+                user,
+            }
+        });
     } catch (err) {
         console.error("updateUserByAdmin error:", err);
         res.status(500).json({ message: "Failed to update user" });

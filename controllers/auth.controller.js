@@ -92,8 +92,10 @@ exports.googleLogin = async (req, res) => {
         );
 
         res.json({
-            token,
-            user,
+            data: {
+                user,
+                token,
+            }
         });
     } catch (err) {
         console.error("Google login error:", err);
@@ -132,7 +134,7 @@ exports.register = async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        
+
         const profileData = fullName ? { fullName } : {};
 
         const user = await User.create({
@@ -150,8 +152,10 @@ exports.register = async (req, res) => {
         );
 
         res.status(201).json({
-            token,
-            user,
+            data: {
+                user,
+                token,
+            }
         });
     } catch (err) {
         console.error(err);
@@ -201,8 +205,10 @@ exports.login = async (req, res) => {
         );
 
         res.json({
-            token,
-            user,
+            data: {
+                user,
+                token,
+            }
         });
     } catch (err) {
         console.error(err);
