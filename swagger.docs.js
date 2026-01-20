@@ -291,4 +291,195 @@
  *       403:
  *         description: Forbidden
  *       404:
- *         description: Not found*/
+ *         description: Not found
+ */
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Drones
+ *     description: Quản lý drone của người dùng
+ */
+
+/**
+ * @swagger
+ * /api/drones:
+ *   post:
+ *     summary: Tạo mới drone
+ *     tags: [Drones]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateDroneRequest'
+ *           example:
+ *             droneId: "DRONE001"
+ *             serialNumber: "SN123456"
+ *             model: "DJI Air 3"
+ *             ownerType: "INDIVIDUAL"
+ *             maxAltitude: 5000
+ *     responses:
+ *       201:
+ *         description: Tạo drone thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/DroneResponse'
+ *       400:
+ *         description: Thiếu thông tin bắt buộc
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Không được xác thực
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       409:
+ *         description: Drone ID đã tồn tại
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               message: "Drone already exists"
+ *       500:
+ *         description: Lỗi server
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *
+ *   get:
+ *     summary: Lấy danh sách tất cả drone của user hiện tại
+ *     tags: [Drones]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/DroneResponse'
+ *       401:
+ *         description: Không được xác thực
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Lỗi server
+ *
+ * /api/drones/{id}:
+ *   get:
+ *     summary: Lấy chi tiết drone theo ID
+ *     tags: [Drones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: "507f1f77bcf86cd799439011"
+ *     responses:
+ *       200:
+ *         description: Lấy chi tiết thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/DroneResponse'
+ *       401:
+ *         description: Không được xác thực
+ *       403:
+ *         description: Không được phép - bạn không sở hữu drone này
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               message: "Unauthorized: You don't own this drone"
+ *       404:
+ *         description: Không tìm thấy drone
+ *       500:
+ *         description: Lỗi server
+ *
+ *   put:
+ *     summary: Cập nhật thông tin drone
+ *     tags: [Drones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateDroneRequest'
+ *           example:
+ *             model: "DJI Air 3S"
+ *             maxAltitude: 6000
+ *             status: "IDLE"
+ *     responses:
+ *       200:
+ *         description: Cập nhật thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/DroneResponse'
+ *       400:
+ *         description: Dữ liệu không hợp lệ
+ *       401:
+ *         description: Không được xác thực
+ *       403:
+ *         description: Không được phép - bạn không sở hữu drone này
+ *       404:
+ *         description: Không tìm thấy drone
+ *       500:
+ *         description: Lỗi server
+ *
+ *   delete:
+ *     summary: Xoá drone
+ *     tags: [Drones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Xoá thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Drone deleted successfully"
+ *       401:
+ *         description: Không được xác thực
+ *       403:
+ *         description: Không được phép - bạn không sở hữu drone này
+ *       404:
+ *         description: Không tìm thấy drone
+ *       500:
+ *         description: Lỗi server
+ */

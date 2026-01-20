@@ -15,8 +15,8 @@ var app = express();
    DATABASE CONNECTION
 ========================= */
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected!!"))
-  .catch(err => console.error("MongoDB error:", err));
+   .then(() => console.log("MongoDB connected!!"))
+   .catch(err => console.error("MongoDB error:", err));
 
 /* =========================
    VIEW ENGINE SETUP (Pug)
@@ -30,9 +30,9 @@ app.set('view engine', 'pug');
 // CORS Configuration
 app.use(cors({
    origin: process.env.CORS_ORIGIN || '*', //CORS_ORIGIN=http://localhost:5713
-  credentials: true, 
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+   credentials: true,
+   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
 
 app.use(logger('dev'));
@@ -45,8 +45,8 @@ app.use(express.static(path.join(__dirname, 'public')));
    SWAGGER DOCUMENTATION
 ========================= */
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: 'WDP301 API Documentation'
+   customCss: '.swagger-ui .topbar { display: none }',
+   customSiteTitle: 'WDP301 API Documentation'
 }));
 
 /* =========================
@@ -54,23 +54,24 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 ========================= */
 app.use('/api/auth', require('./routes/auth.routes')); // login / register
 app.use('/api/admin', require('./routes/admin.routes')); // admin CRUD accounts
+app.use('/api/drones', require('./routes/drone.routes')); // drone CRUD
 
 /* =========================
    404 HANDLER
 ========================= */
 app.use(function (req, res, next) {
-  next(createError(404));
+   next(createError(404));
 });
 
 /* =========================
    ERROR HANDLER
 ========================= */
 app.use(function (err, req, res, next) {
-  res.status(err.status || 500);
-  res.json({
-    message: err.message,
-    error: req.app.get('env') === 'development' ? err : {}
-  });
+   res.status(err.status || 500);
+   res.json({
+      message: err.message,
+      error: req.app.get('env') === 'development' ? err : {}
+   });
 });
 
 module.exports = app;

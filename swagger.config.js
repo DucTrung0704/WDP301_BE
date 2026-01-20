@@ -124,6 +124,114 @@ const options = {
             },
           },
         },
+        Drone: {
+          type: 'object',
+          properties: {
+            _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
+            droneId: { type: 'string', example: 'DRONE001', description: 'Unique drone identifier' },
+            serialNumber: { type: 'string', example: 'SN123456' },
+            model: { type: 'string', example: 'DJI Air 3' },
+            owner: {
+              type: 'object',
+              properties: {
+                _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
+                email: { type: 'string', example: 'user@example.com' },
+                profile: {
+                  type: 'object',
+                  properties: {
+                    fullName: { type: 'string', example: 'John Doe' },
+                  },
+                },
+                role: { type: 'string', example: 'INDIVIDUAL_OPERATOR' },
+              },
+            },
+            ownerType: {
+              type: 'string',
+              enum: ['INDIVIDUAL', 'FLEET'],
+              example: 'INDIVIDUAL',
+            },
+            maxAltitude: { type: 'number', example: 5000 },
+            status: {
+              type: 'string',
+              enum: ['IDLE', 'FLYING', 'MAINTENANCE', 'DISABLED'],
+              example: 'IDLE',
+            },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        CreateDroneRequest: {
+          type: 'object',
+          required: ['droneId', 'serialNumber'],
+          properties: {
+            droneId: {
+              type: 'string',
+              example: 'DRONE001',
+              description: 'Unique drone identifier',
+            },
+            serialNumber: {
+              type: 'string',
+              example: 'SN123456',
+              description: 'Serial number of the drone',
+            },
+            model: {
+              type: 'string',
+              example: 'DJI Air 3',
+              description: 'Drone model',
+            },
+            ownerType: {
+              type: 'string',
+              enum: ['INDIVIDUAL', 'FLEET'],
+              example: 'INDIVIDUAL',
+              description: 'Type of owner (default: INDIVIDUAL)',
+            },
+            maxAltitude: {
+              type: 'number',
+              example: 5000,
+              description: 'Maximum altitude in meters',
+            },
+          },
+        },
+        UpdateDroneRequest: {
+          type: 'object',
+          properties: {
+            serialNumber: {
+              type: 'string',
+              example: 'SN123456',
+            },
+            model: {
+              type: 'string',
+              example: 'DJI Air 3S',
+            },
+            ownerType: {
+              type: 'string',
+              enum: ['INDIVIDUAL', 'FLEET'],
+            },
+            maxAltitude: {
+              type: 'number',
+              example: 6000,
+            },
+            status: {
+              type: 'string',
+              enum: ['IDLE', 'FLYING', 'MAINTENANCE', 'DISABLED'],
+            },
+          },
+        },
+        DroneResponse: {
+          type: 'object',
+          properties: {
+            _id: { type: 'string' },
+            droneId: { type: 'string' },
+            serialNumber: { type: 'string' },
+            model: { type: 'string' },
+            owner: { $ref: '#/components/schemas/User' },
+            ownerType: { type: 'string' },
+            maxAltitude: { type: 'number' },
+            status: { type: 'string' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
       },
     },
   },
