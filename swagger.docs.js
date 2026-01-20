@@ -165,17 +165,19 @@
  *         application/json:
  *           schema:
  *             type: object
- *             required: [email, password]
+ *             required: [email, password, fullName]
  *             properties:
- *               email:
- *                 type: string
- *                 example: "newuser@example.com"
- *               password:
- *                 type: string
- *                 example: "password123"
  *               fullName:
  *                 type: string
- *                 example: "New User"
+ *                 example: "userthul"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "userthul@gmail.com"
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: "123456"
  *               role:
  *                 type: string
  *                 enum: [INDIVIDUAL_OPERATOR, FLEET_OPERATOR]
@@ -186,19 +188,33 @@
  *                 example: "active"
  *     responses:
  *       201:
- *         description: Created
+ *         description: Người dùng được tạo thành công
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/AuthResponse'
+ *             example:
+ *               data:
+ *                 _id: "696f32e9bd108ced66f635e0"
+ *                 email: "userthul@gmail.com"
+ *                 password: "$2b$10$2UEzp14XRYov8xQ5ky0hm.BfGkt2Yk2mP5UBXqPd4KDnke3FzSu30"
+ *                 profile:
+ *                   fullName: "userthul"
+ *                 providers:
+ *                   local: true
+ *                 role: "FLEET_OPERATOR"
+ *                 status: "active"
+ *                 createdAt: "2026-01-20T07:46:49.5362"
+ *                 updatedAt: "2026-01-20T07:46:49.5362"
+ *                 __v: 0
  *       400:
- *         description: Bad request
+ *         description: Bad request - Thiếu thông tin bắt buộc
  *       401:
- *         description: Unauthorized
+ *         description: Unauthorized - Không được xác thực
  *       403:
- *         description: Forbidden
+ *         description: Forbidden - Chỉ UTM_ADMIN mới được tạo user
  *       409:
- *         description: Email exists
+ *         description: Conflict - Email đã tồn tại
  *
  * /api/admin/users/{id}:
  *   get:
