@@ -92,10 +92,8 @@ exports.googleLogin = async (req, res) => {
         );
 
         res.json({
-            data: {
-                user,
-                token,
-            }
+            token,
+            user,
         });
     } catch (err) {
         console.error("Google login error:", err);
@@ -152,10 +150,8 @@ exports.register = async (req, res) => {
         );
 
         res.status(201).json({
-            data: {
-                user,
-                token,
-            }
+            token,
+            user,
         });
     } catch (err) {
         console.error(err);
@@ -205,10 +201,8 @@ exports.login = async (req, res) => {
         );
 
         res.json({
-            data: {
-                user,
-                token,
-            }
+            token,
+            user,
         });
     } catch (err) {
         console.error(err);
