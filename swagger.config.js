@@ -167,17 +167,12 @@ const options = {
         },
         CreateDroneRequest: {
           type: 'object',
-          required: ['droneId', 'serialNumber'],
+          required: ['serialNumber'],
           properties: {
-            droneId: {
-              type: 'string',
-              example: 'DRONE001',
-              description: 'Unique drone identifier',
-            },
             serialNumber: {
               type: 'string',
               example: 'SN123456',
-              description: 'Serial number of the drone',
+              description: 'Serial number of the drone (required)',
             },
             model: {
               type: 'string',

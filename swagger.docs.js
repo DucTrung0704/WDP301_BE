@@ -362,7 +362,7 @@
  * @swagger
  * /api/drones:
  *   post:
- *     summary: Tạo mới drone
+ *     summary: Tạo mới drone (droneId được tự động tạo)
  *     tags: [Drones]
  *     security:
  *       - bearerAuth: []
@@ -373,7 +373,6 @@
  *           schema:
  *             $ref: '#/components/schemas/CreateDroneRequest'
  *           example:
- *             droneId: "DRONE001"
  *             serialNumber: "SN123456"
  *             model: "DJI Air 3"
  *             ownerType: "INDIVIDUAL"
@@ -397,14 +396,6 @@
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
- *       409:
- *         description: Drone ID đã tồn tại
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *             example:
- *               message: "Drone already exists"
  *       500:
  *         description: Lỗi server
  *         content:
