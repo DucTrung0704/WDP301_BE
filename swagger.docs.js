@@ -117,25 +117,7 @@
  *               $ref: '#/components/schemas/ErrorResponse'
  *             example:
  *               message: "Login failed"
- *
- * message: "Invalid credentials"
-    * 403:
- * description: Tài khoản bị vô hiệu hóa
-    * content:
- * application / json:
- * schema:
- * $ref: '#/components/schemas/ErrorResponse'
-    * example:
- * message: "Account disabled"
-    * 500:
- * description: Lỗi server
-    * content:
- * application / json:
- * schema:
- * $ref: '#/components/schemas/ErrorResponse'
-    * example:
- * message: "Login failed"
-    */
+ */
 
 /**
  * @swagger
