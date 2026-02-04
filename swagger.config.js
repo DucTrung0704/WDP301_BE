@@ -108,7 +108,12 @@ const options = {
             token: {
               type: 'string',
               example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-              description: 'JWT token for authentication',
+              description: 'JWT access token (expires in 7 days)',
+            },
+            refreshToken: {
+              type: 'string',
+              example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+              description: 'JWT refresh token (expires in 30 days)',
             },
             user: {
               $ref: '#/components/schemas/User',

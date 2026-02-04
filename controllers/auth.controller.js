@@ -84,15 +84,27 @@ exports.googleLogin = async (req, res) => {
         user.lastLoginAt = new Date();
         await user.save();
 
-        // Generate JWT
+        // Generate JWT access token
         const token = jwt.sign(
             { userId: user._id, role: user.role },
             process.env.JWT_SECRET,
             { expiresIn: "7d" }
         );
 
+        // Generate refresh token
+        const refreshToken = jwt.sign(
+            { userId: user._id },
+            process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+            { expiresIn: "30d" }
+        );
+
+        // Store refresh token in database
+        user.refreshTokens.push(refreshToken);
+        await user.save();
+
         res.json({
             token,
+            refreshToken,
             user,
         });
     } catch (err) {
@@ -149,8 +161,20 @@ exports.register = async (req, res) => {
             { expiresIn: "7d" }
         );
 
+        // Generate refresh token
+        const refreshToken = jwt.sign(
+            { userId: user._id },
+            process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+            { expiresIn: "30d" }
+        );
+
+        // Store refresh token in database
+        user.refreshTokens.push(refreshToken);
+        await user.save();
+
         res.status(201).json({
             token,
+            refreshToken,
             user,
         });
     } catch (err) {
@@ -200,8 +224,20 @@ exports.login = async (req, res) => {
             { expiresIn: "7d" }
         );
 
+        // Generate refresh token
+        const refreshToken = jwt.sign(
+            { userId: user._id },
+            process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+            { expiresIn: "30d" }
+        );
+
+        // Store refresh token in database
+        user.refreshTokens.push(refreshToken);
+        await user.save();
+
         res.json({
             token,
+            refreshToken,
             user,
         });
     } catch (err) {
@@ -212,12 +248,19 @@ exports.login = async (req, res) => {
 
 /**
  * LOGOUT
- * Với JWT stateless, logout phía server chỉ cần để client xoá token.
- * Endpoint này chủ yếu để FE gọi và xử lý xoá token ở client.
+ * Xoá tất cả refresh tokens của user khỏi database
  */
 exports.logout = async (req, res) => {
     try {
-        // Nếu sau này dùng cookie (res.clearCookie) thì thêm vào đây.
+        const userId = req.user.id;
+
+        // Xoá tất cả refresh tokens
+        await User.findByIdAndUpdate(
+            userId,
+            { refreshTokens: [] },
+            { new: true }
+        );
+
         return res.status(200).json({ message: "Logged out successfully" });
     } catch (err) {
         console.error(err);

@@ -27,6 +27,7 @@
  *               $ref: '#/components/schemas/AuthResponse'
  *             example:
  *               token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *               refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
  *               user:
  *                 _id: "507f1f77bcf86cd799439011"
  *                 email: "user@example.com"
@@ -84,6 +85,7 @@
  *               $ref: '#/components/schemas/AuthResponse'
  *             example:
  *               token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *               refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
  *               user:
  *                 _id: "507f1f77bcf86cd799439011"
  *                 email: "user@example.com"
@@ -115,19 +117,38 @@
  *               $ref: '#/components/schemas/ErrorResponse'
  *             example:
  *               message: "Login failed"
- */
+ *
+ * message: "Invalid credentials"
+    * 403:
+ * description: Tài khoản bị vô hiệu hóa
+    * content:
+ * application / json:
+ * schema:
+ * $ref: '#/components/schemas/ErrorResponse'
+    * example:
+ * message: "Account disabled"
+    * 500:
+ * description: Lỗi server
+    * content:
+ * application / json:
+ * schema:
+ * $ref: '#/components/schemas/ErrorResponse'
+    * example:
+ * message: "Login failed"
+    */
 
 /**
  * @swagger
  * /api/auth/logout:
  *   post:
- *     summary: Đăng xuất khỏi hệ thống
+ *     summary: Đăng xuất khỏi hệ thống (xóa tất cả refresh tokens)
+ *     description: Xóa tất cả refresh tokens của user khỏi cơ sở dữ liệu, vô hiệu hóa toàn bộ phiên
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Đăng xuất thành công
+ *         description: Đăng xuất thành công, tất cả refresh tokens đã bị xóa
  *         content:
  *           application/json:
  *             schema:
@@ -137,7 +158,7 @@
  *                   type: string
  *                   example: "Logged out successfully"
  *       401:
- *         description: Chưa được xác thực
+ *         description: Chưa được xác thực (JWT token không hợp lệ hoặc hết hạn)
  *         content:
  *           application/json:
  *             schema:
