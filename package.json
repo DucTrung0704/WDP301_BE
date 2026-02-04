@@ -7,6 +7,7 @@
     "dev": "nodemon ./bin/www"
   },
   "dependencies": {
+    "@turf/turf": "^7.3.3",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "~1.4.4",
     "cors": "^2.8.5",
@@ -15,11 +16,11 @@
     "express": "~4.16.1",
     "google-auth-library": "^10.5.0",
     "http-errors": "~1.6.3",
-    "pug": "^3.0.3",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.1.2",
     "morgan": "~1.9.1",
     "nodemon": "^3.1.11",
+    "pug": "^3.0.3",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
   }
