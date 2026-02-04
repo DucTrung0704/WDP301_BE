@@ -209,3 +209,18 @@ exports.login = async (req, res) => {
         res.status(500).json({ message: "Login failed" });
     }
 };
+
+/**
+ * LOGOUT
+ * Với JWT stateless, logout phía server chỉ cần để client xoá token.
+ * Endpoint này chủ yếu để FE gọi và xử lý xoá token ở client.
+ */
+exports.logout = async (req, res) => {
+    try {
+        // Nếu sau này dùng cookie (res.clearCookie) thì thêm vào đây.
+        return res.status(200).json({ message: "Logged out successfully" });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ message: "Logout failed" });
+    }
+};

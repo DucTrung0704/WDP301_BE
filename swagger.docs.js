@@ -119,6 +119,43 @@
 
 /**
  * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: Đăng xuất khỏi hệ thống
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Đăng xuất thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Logged out successfully"
+ *       401:
+ *         description: Chưa được xác thực
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               message: "Unauthorized"
+ *       500:
+ *         description: Lỗi server
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               message: "Logout failed"
+ */
+
+/**
+ * @swagger
  * tags:
  *   - name: Admin
  *     description: Quản lý tài khoản (chỉ UTM_ADMIN)
