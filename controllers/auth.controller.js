@@ -130,7 +130,7 @@ exports.register = async (req, res) => {
         }
 
         // Validate role (if provided) - chỉ cho phép 2 role ngoài UTM_ADMIN
-        const allowedRoles = ["INDIVIDUAL_OPERATOR", "FLEET_OPERATOR"];
+        const allowedRoles = ["INDIVIDUAL_OPERATOR", "FLEET_OPERATOR", "UTM_ADMIN"];
 
         let userRole = "INDIVIDUAL_OPERATOR";
         if (role) {
@@ -155,17 +155,17 @@ exports.register = async (req, res) => {
             role: userRole,
         });
 
-        const token = jwt.sign(
-            { userId: user._id, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: "7d" }
-        );
+        // const token = jwt.sign(
+        //     { userId: user._id, role: user.role },
+        //     process.env.JWT_SECRET,
+        //     { expiresIn: "7d" }
+        // );
 
         // Generate refresh token
         const refreshToken = jwt.sign(
             { userId: user._id },
             process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
-            { expiresIn: "30d" }
+            { expiresIn: "7d" }
         );
 
         // Store refresh token in database
@@ -247,19 +247,88 @@ exports.login = async (req, res) => {
 };
 
 /**
+ * REFRESH TOKEN
+ * Frontend gửi: { refreshToken }
+ * Trả về: new access token + user data
+ */
+exports.refreshToken = async (req, res) => {
+    try {
+        const { refreshToken } = req.body;
+
+        if (!refreshToken) {
+            return res.status(400).json({ message: "Missing refresh token" });
+        }
+
+        // Verify refresh token
+        let decoded;
+        try {
+            decoded = jwt.verify(
+                refreshToken,
+                process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET
+            );
+        } catch (err) {
+            return res.status(401).json({ message: "Invalid refresh token" });
+        }
+
+        // Find user and check if refresh token exists
+        const user = await User.findById(decoded.userId);
+
+        if (!user || !user.refreshTokens.includes(refreshToken)) {
+            return res.status(401).json({ message: "Refresh token not found or expired" });
+        }
+
+        if (user.status !== "active") {
+            return res.status(403).json({ message: "Account disabled" });
+        }
+
+        // Generate new access token
+        const newAccessToken = jwt.sign(
+            { userId: user._id, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        res.json({
+            token: newAccessToken,
+            refreshToken,
+            user: {
+                _id: user._id,
+                email: user.email,
+                profile: user.profile,
+                role: user.role,
+            },
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Token refresh failed" });
+    }
+};
+
+/**
  * LOGOUT
- * Xoá tất cả refresh tokens của user khỏi database
+ * Xóa refresh token khỏi database
+ * Frontend gửi: { refreshToken } hoặc Authorization header
  */
 exports.logout = async (req, res) => {
     try {
         const userId = req.user.id;
+        const { refreshToken } = req.body;
 
-        // Xoá tất cả refresh tokens
-        await User.findByIdAndUpdate(
-            userId,
-            { refreshTokens: [] },
-            { new: true }
-        );
+        if (refreshToken) {
+            // Xóa refresh token cụ thể
+            await User.findByIdAndUpdate(
+                userId,
+                { $pull: { refreshTokens: refreshToken } },
+                { new: true }
+            );
+        } else {
+            // Xóa tất cả refresh tokens (logout all devices)
+            await User.findByIdAndUpdate(
+                userId,
+                { refreshTokens: [] },
+                { new: true }
+            );
+        }
 
         return res.status(200).json({ message: "Logged out successfully" });
     } catch (err) {
