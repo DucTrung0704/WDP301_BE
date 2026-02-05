@@ -155,17 +155,18 @@ exports.register = async (req, res) => {
             role: userRole,
         });
 
-        // const token = jwt.sign(
-        //     { userId: user._id, role: user.role },
-        //     process.env.JWT_SECRET,
-        //     { expiresIn: "7d" }
-        // );
+        // Generate JWT access token
+        const token = jwt.sign(
+            { userId: user._id, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
 
         // Generate refresh token
         const refreshToken = jwt.sign(
             { userId: user._id },
             process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
-            { expiresIn: "7d" }
+            { expiresIn: "30d" }
         );
 
         // Store refresh token in database
