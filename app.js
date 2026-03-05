@@ -63,6 +63,7 @@ app.use("/api/auth", require("./routes/auth.routes")); // login / register
 app.use("/api/admin", require("./routes/admin.routes")); // admin CRUD accounts
 app.use("/api/drones", require("./routes/drone.routes")); // drone CRUD
 app.use("/api/zones", require("./routes/zone.routes")); // zone CRUD
+app.use("/api/flights", require("./routes/flight.routes")); // flight history
 
 /* =========================
    404 HANDLER

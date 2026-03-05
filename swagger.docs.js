@@ -354,6 +354,8 @@
 /**
  * @swagger
  * tags:
+ *   - name: Flights
+ *     description: Quản lý lịch sử bay của drone
  *   - name: Drones
  *     description: Quản lý drone của người dùng
  */
