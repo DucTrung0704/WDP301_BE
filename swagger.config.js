@@ -19,6 +19,10 @@ const options = {
         url: 'http://localhost:5000',
         description: 'Development server',
       },
+      {
+        url: 'https://wdp-301-be-mauve.vercel.app',
+        description: 'Development server',
+      },
     ],
     components: {
       securitySchemes: {
