@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const turf = require("@turf/turf");
 
 const ZoneSchema = new mongoose.Schema(
   {
