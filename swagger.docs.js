@@ -1058,3 +1058,154 @@
  *             example:
  *               message: "Failed to archive zone"
  */
+
+/**
+ * @swagger
+ * tags:
+ *   name: Flight
+ *   description: Flight management APIs
+ */
+
+/**
+ * @swagger
+ * /api/flights:
+ *   get:
+ *     summary: Get all flights
+ *     tags: [Flight]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of flights
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Flight'
+ *       401:
+ *         $ref: '#/components/responses/ErrorResponse'
+ */
+
+/**
+ * @swagger
+ * /api/flights:
+ *   post:
+ *     summary: Create a new flight
+ *     tags: [Flight]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateFlightRequest'
+ *     responses:
+ *       201:
+ *         description: Flight created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Flight'
+ *       400:
+ *         $ref: '#/components/responses/ErrorResponse'
+ *       401:
+ *         $ref: '#/components/responses/ErrorResponse'
+ */
+
+/**
+ * @swagger
+ * /api/flights/{id}:
+ *   get:
+ *     summary: Get flight by ID
+ *     tags: [Flight]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Flight ID
+ *     responses:
+ *       200:
+ *         description: Flight details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Flight'
+ *       404:
+ *         $ref: '#/components/responses/ErrorResponse'
+ *       401:
+ *         $ref: '#/components/responses/ErrorResponse'
+ */
+
+/**
+ * @swagger
+ * /api/flights/{id}:
+ *   put:
+ *     summary: Update flight by ID
+ *     tags: [Flight]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Flight ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateFlightRequest'
+ *     responses:
+ *       200:
+ *         description: Flight updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Flight'
+ *       400:
+ *         $ref: '#/components/responses/ErrorResponse'
+ *       404:
+ *         $ref: '#/components/responses/ErrorResponse'
+ *       401:
+ *         $ref: '#/components/responses/ErrorResponse'
+ */
+
+/**
+ * @swagger
+ * /api/flights/{id}:
+ *   delete:
+ *     summary: Delete flight by ID
+ *     tags: [Flight]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Flight ID
+ *     responses:
+ *       200:
+ *         description: Flight deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Flight deleted
+ *       404:
+ *         $ref: '#/components/responses/ErrorResponse'
+ *       401:
+ *         $ref: '#/components/responses/ErrorResponse'
+ */

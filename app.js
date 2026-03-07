@@ -38,6 +38,14 @@ app.use(
   }),
 );
 
+
+
+app.use(logger("dev"));
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+app.use(express.static(path.join(__dirname, "public")));
+
 /* =========================
    SWAGGER DOCUMENTATION
 ========================= */
@@ -49,14 +57,6 @@ app.use(
     customSiteTitle: "WDP301 API Documentation",
   }),
 );
-
-app.use(logger("dev"));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-app.use(cookieParser());
-app.use(express.static(path.join(__dirname, "public")));
-
-
 
 /* =========================
    ROUTES
