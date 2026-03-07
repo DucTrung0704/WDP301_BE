@@ -12,6 +12,12 @@ router.get("/", auth, zoneController.getZones);
 // Check if a point is in a zone
 router.post("/check", auth, zoneController.checkPoint);
 
+// Get zone by ID
+router.get("/:id", auth, zoneController.getZoneById);
+
+// Update a zone
+router.put("/:id", auth, zoneController.updateZone);
+
 // Delete (archive) a zone
 router.delete("/:id", auth, zoneController.deleteZone);
 
