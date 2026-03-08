@@ -19,6 +19,10 @@ const options = {
         url: 'http://localhost:5000',
         description: 'Development server',
       },
+      {
+        url: 'https://wdp-301-be-mauve.vercel.app',
+        description: 'Development server',
+      },
     ],
     components: {
       securitySchemes: {
@@ -108,7 +112,12 @@ const options = {
             token: {
               type: 'string',
               example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-              description: 'JWT token for authentication',
+              description: 'JWT access token (expires in 7 days)',
+            },
+            refreshToken: {
+              type: 'string',
+              example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+              description: 'JWT refresh token (expires in 30 days)',
             },
             user: {
               $ref: '#/components/schemas/User',
@@ -162,17 +171,12 @@ const options = {
         },
         CreateDroneRequest: {
           type: 'object',
-          required: ['droneId', 'serialNumber'],
+          required: ['serialNumber'],
           properties: {
-            droneId: {
-              type: 'string',
-              example: 'DRONE001',
-              description: 'Unique drone identifier',
-            },
             serialNumber: {
               type: 'string',
               example: 'SN123456',
-              description: 'Serial number of the drone',
+              description: 'Serial number of the drone (required)',
             },
             model: {
               type: 'string',
@@ -230,6 +234,85 @@ const options = {
             status: { type: 'string' },
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        Flight: {
+          type: 'object',
+          properties: {
+            _id: { type: 'string', example: '507f1f77bcf86cd799439099' },
+            drone: {
+              $ref: '#/components/schemas/Drone',
+            },
+            operator: {
+              $ref: '#/components/schemas/User',
+            },
+            startTime: {
+              type: 'string',
+              format: 'date-time',
+              example: '2026-01-20T08:00:00Z',
+            },
+            endTime: {
+              type: 'string',
+              format: 'date-time',
+              example: '2026-01-20T09:00:00Z',
+            },
+            origin: {
+              type: 'string',
+              example: 'Tan Son Nhat Airport',
+            },
+            destination: {
+              type: 'string',
+              example: 'District 1, HCMC',
+            },
+            status: {
+              type: 'string',
+              enum: ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'],
+              example: 'COMPLETED',
+            },
+            notes: {
+              type: 'string',
+              example: 'Routine inspection flight',
+            },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        CreateFlightRequest: {
+          type: 'object',
+          required: ['droneId', 'startTime'],
+          properties: {
+            droneId: {
+              type: 'string',
+              example: '507f1f77bcf86cd799439011',
+              description: 'MongoDB ObjectId of the drone',
+            },
+            startTime: {
+              type: 'string',
+              format: 'date-time',
+              example: '2026-01-20T08:00:00Z',
+            },
+            endTime: {
+              type: 'string',
+              format: 'date-time',
+              example: '2026-01-20T09:00:00Z',
+            },
+            origin: {
+              type: 'string',
+              example: 'Tan Son Nhat Airport',
+            },
+            destination: {
+              type: 'string',
+              example: 'District 1, HCMC',
+            },
+            status: {
+              type: 'string',
+              enum: ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'],
+              example: 'COMPLETED',
+            },
+            notes: {
+              type: 'string',
+              example: 'Routine inspection flight',
+            },
           },
         },
       },

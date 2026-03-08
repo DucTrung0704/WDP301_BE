@@ -1,10 +1,8 @@
 const Drone = require("../models/drone.model");
 
-//CREATE a new drone
 exports.createDrone = async (req, res) => {
     try {
         const {
-            droneId,
             serialNumber,
             model,
             ownerType,
@@ -12,14 +10,8 @@ exports.createDrone = async (req, res) => {
         } = req.body;
 
         // Validate required fields
-        if (!droneId || !serialNumber) {
-            return res.status(400).json({ message: "droneId and serialNumber are required" });
-        }
-
-        // Check if droneId already exists
-        const exists = await Drone.findOne({ droneId });
-        if (exists) {
-            return res.status(409).json({ message: "Drone already exists" });
+        if (!serialNumber) {
+            return res.status(400).json({ message: "serialNumber is required" });
         }
 
         // Check if user is authenticated
@@ -27,9 +19,8 @@ exports.createDrone = async (req, res) => {
             return res.status(401).json({ message: "User not authenticated" });
         }
 
-        // Use authenticated user's ID as owner
+        // Create drone with auto-generated droneId
         const drone = await Drone.create({
-            droneId,
             serialNumber,
             model,
             owner: req.user.id,

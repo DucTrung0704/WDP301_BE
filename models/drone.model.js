@@ -5,7 +5,7 @@ const DroneSchema = new mongoose.Schema(
         droneId: {
             type: String,
             unique: true,
-            required: true,
+            default: () => `DRONE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         },
 
         serialNumber: {

@@ -27,6 +27,7 @@
  *               $ref: '#/components/schemas/AuthResponse'
  *             example:
  *               token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *               refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
  *               user:
  *                 _id: "507f1f77bcf86cd799439011"
  *                 email: "user@example.com"
@@ -84,6 +85,7 @@
  *               $ref: '#/components/schemas/AuthResponse'
  *             example:
  *               token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *               refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
  *               user:
  *                 _id: "507f1f77bcf86cd799439011"
  *                 email: "user@example.com"
@@ -115,6 +117,44 @@
  *               $ref: '#/components/schemas/ErrorResponse'
  *             example:
  *               message: "Login failed"
+ */
+
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: Đăng xuất khỏi hệ thống (xóa tất cả refresh tokens)
+ *     description: Xóa tất cả refresh tokens của user khỏi cơ sở dữ liệu, vô hiệu hóa toàn bộ phiên
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Đăng xuất thành công, tất cả refresh tokens đã bị xóa
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Logged out successfully"
+ *       401:
+ *         description: Chưa được xác thực (JWT token không hợp lệ hoặc hết hạn)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               message: "Unauthorized"
+ *       500:
+ *         description: Lỗi server
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               message: "Logout failed"
  */
 
 /**
@@ -314,6 +354,8 @@
 /**
  * @swagger
  * tags:
+ *   - name: Flights
+ *     description: Quản lý lịch sử bay của drone
  *   - name: Drones
  *     description: Quản lý drone của người dùng
  */
@@ -322,7 +364,7 @@
  * @swagger
  * /api/drones:
  *   post:
- *     summary: Tạo mới drone
+ *     summary: Tạo mới drone (droneId được tự động tạo)
  *     tags: [Drones]
  *     security:
  *       - bearerAuth: []
@@ -333,7 +375,6 @@
  *           schema:
  *             $ref: '#/components/schemas/CreateDroneRequest'
  *           example:
- *             droneId: "DRONE001"
  *             serialNumber: "SN123456"
  *             model: "DJI Air 3"
  *             ownerType: "INDIVIDUAL"
@@ -357,14 +398,6 @@
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
- *       409:
- *         description: Drone ID đã tồn tại
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *             example:
- *               message: "Drone already exists"
  *       500:
  *         description: Lỗi server
  *         content:
@@ -1193,4 +1226,155 @@
  *               $ref: '#/components/schemas/ErrorResponse'
  *             example:
  *               message: "Failed to archive zone"
+ */
+
+/**
+ * @swagger
+ * tags:
+ *   name: Flight
+ *   description: Flight management APIs
+ */
+
+/**
+ * @swagger
+ * /api/flights:
+ *   get:
+ *     summary: Get all flights
+ *     tags: [Flight]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of flights
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Flight'
+ *       401:
+ *         $ref: '#/components/responses/ErrorResponse'
+ */
+
+/**
+ * @swagger
+ * /api/flights:
+ *   post:
+ *     summary: Create a new flight
+ *     tags: [Flight]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateFlightRequest'
+ *     responses:
+ *       201:
+ *         description: Flight created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Flight'
+ *       400:
+ *         $ref: '#/components/responses/ErrorResponse'
+ *       401:
+ *         $ref: '#/components/responses/ErrorResponse'
+ */
+
+/**
+ * @swagger
+ * /api/flights/{id}:
+ *   get:
+ *     summary: Get flight by ID
+ *     tags: [Flight]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Flight ID
+ *     responses:
+ *       200:
+ *         description: Flight details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Flight'
+ *       404:
+ *         $ref: '#/components/responses/ErrorResponse'
+ *       401:
+ *         $ref: '#/components/responses/ErrorResponse'
+ */
+
+/**
+ * @swagger
+ * /api/flights/{id}:
+ *   put:
+ *     summary: Update flight by ID
+ *     tags: [Flight]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Flight ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateFlightRequest'
+ *     responses:
+ *       200:
+ *         description: Flight updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Flight'
+ *       400:
+ *         $ref: '#/components/responses/ErrorResponse'
+ *       404:
+ *         $ref: '#/components/responses/ErrorResponse'
+ *       401:
+ *         $ref: '#/components/responses/ErrorResponse'
+ */
+
+/**
+ * @swagger
+ * /api/flights/{id}:
+ *   delete:
+ *     summary: Delete flight by ID
+ *     tags: [Flight]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Flight ID
+ *     responses:
+ *       200:
+ *         description: Flight deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Flight deleted
+ *       404:
+ *         $ref: '#/components/responses/ErrorResponse'
+ *       401:
+ *         $ref: '#/components/responses/ErrorResponse'
  */

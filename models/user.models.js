@@ -14,7 +14,7 @@ const userSchema = new mongoose.Schema(
 
         password: {
             type: String,
-            select: false, 
+            select: false,
         },
 
         //Providers
@@ -40,9 +40,9 @@ const userSchema = new mongoose.Schema(
         role: {
             type: String,
             enum: [
-                "UTM_ADMIN",            
-                "INDIVIDUAL_OPERATOR",  
-                "FLEET_OPERATOR",       
+                "UTM_ADMIN",
+                "INDIVIDUAL_OPERATOR",
+                "FLEET_OPERATOR",
             ],
             default: "INDIVIDUAL_OPERATOR",
         },
@@ -53,6 +53,13 @@ const userSchema = new mongoose.Schema(
             enum: ["active", "inactive", "banned"],
             default: "active",
         },
+
+        //Token management
+        refreshTokens: [
+            {
+                type: String,
+            },
+        ],
 
         //Audit
         lastLoginAt: Date,
