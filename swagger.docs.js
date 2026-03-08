@@ -162,6 +162,8 @@
  * tags:
  *   - name: Admin
  *     description: Quản lý tài khoản (chỉ UTM_ADMIN)
+ *   - name: Users
+ *     description: Quản lý tài khoản công khai và cá nhân (Admin CRUD & User Profile)
  */
 
 /**
@@ -332,6 +334,265 @@
  *   delete:
  *     summary: Xoá người dùng (chỉ UTM_ADMIN)
  *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Deleted
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Not found
+ */
+
+/**
+ * @swagger
+ * /api/users/me:
+ *   get:
+ *     summary: Lấy thông tin profile cá nhân (Bất kỳ user nào đã login)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Not found
+ *
+ *   patch:
+ *     summary: Cập nhật thông tin profile cá nhân
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fullName:
+ *                 type: string
+ *               avatar:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Cập nhật thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Not found
+ *
+ *   delete:
+ *     summary: Vô hiệu hóa tài khoản cá nhân (Xóa mềm - đổi status thành inactive)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Vô hiệu hóa thành công
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Not found
+ *
+ * /api/users:
+ *   get:
+ *     summary: Danh sách tất cả người dùng (chỉ UTM_ADMIN)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/AuthResponse'
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *
+ *   post:
+ *     summary: Tạo mới người dùng (chỉ UTM_ADMIN)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password, fullName]
+ *             properties:
+ *               fullName:
+ *                 type: string
+ *                 example: "newuser"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "newuser@example.com"
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: "123456"
+ *               role:
+ *                 type: string
+ *                 enum: [INDIVIDUAL_OPERATOR, FLEET_OPERATOR]
+ *                 example: "FLEET_OPERATOR"
+ *               status:
+ *                 type: string
+ *                 enum: [active, inactive, banned]
+ *                 example: "active"
+ *     responses:
+ *       201:
+ *         description: Success
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       409:
+ *         description: Conflict
+ *
+ * /api/users/{id}:
+ *   get:
+ *     summary: Xem chi tiết người dùng (chỉ UTM_ADMIN)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Success
+ *       404:
+ *         description: Not found
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *
+ *   put:
+ *     summary: Cập nhật người dùng bằng PUT (chỉ UTM_ADMIN)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               fullName:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *                 enum: [INDIVIDUAL_OPERATOR, FLEET_OPERATOR]
+ *               status:
+ *                 type: string
+ *                 enum: [active, inactive, banned]
+ *     responses:
+ *       200:
+ *         description: Updated
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Not found
+ *
+ *   patch:
+ *     summary: Cập nhật người dùng bằng PATCH (chỉ UTM_ADMIN)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               fullName:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *                 enum: [INDIVIDUAL_OPERATOR, FLEET_OPERATOR]
+ *               status:
+ *                 type: string
+ *                 enum: [active, inactive, banned]
+ *     responses:
+ *       200:
+ *         description: Updated
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Not found
+ *
+ *   delete:
+ *     summary: Xoá người dùng (chỉ UTM_ADMIN)
+ *     tags: [Users]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -1232,35 +1493,15 @@
  * @swagger
  * tags:
  *   name: Flight
- *   description: Flight management APIs
- */
-
-/**
- * @swagger
- * /api/flights:
- *   get:
- *     summary: Get all flights
- *     tags: [Flight]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of flights
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Flight'
- *       401:
- *         $ref: '#/components/responses/ErrorResponse'
+ *   description: Quản lý lịch sử chuyến bay (Dành cho INDIVIDUAL_OPERATOR và FLEET_OPERATOR)
  */
 
 /**
  * @swagger
  * /api/flights:
  *   post:
- *     summary: Create a new flight
+ *     summary: Tạo mới một bản ghi chuyến bay
+ *     description: Ghi nhận một chuyến bay mới vào hệ thống. Yêu cầu drone phải thuộc sở hữu của người tạo.
  *     tags: [Flight]
  *     security:
  *       - bearerAuth: []
@@ -1270,6 +1511,14 @@
  *         application/json:
  *           schema:
  *             $ref: '#/components/schemas/CreateFlightRequest'
+ *           example:
+ *             droneId: "507f1f77bcf86cd799439011"
+ *             startTime: "2026-01-20T08:00:00Z"
+ *             endTime: "2026-01-20T09:00:00Z"
+ *             origin: "Location A"
+ *             destination: "Location B"
+ *             status: "SCHEDULED"
+ *             notes: "First test flight"
  *     responses:
  *       201:
  *         description: Flight created successfully
@@ -1278,103 +1527,52 @@
  *             schema:
  *               $ref: '#/components/schemas/Flight'
  *       400:
- *         $ref: '#/components/responses/ErrorResponse'
+ *         description: Missing required fields (droneId, startTime)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               message: "droneId and startTime are required"
+ *       403:
+ *         description: Unauthorized - User does not own the drone
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               message: "Unauthorized: You don't own this drone"
+ *       404:
+ *         description: Drone not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               message: "Drone not found"
  *       401:
- *         $ref: '#/components/responses/ErrorResponse'
- */
-
-/**
- * @swagger
- * /api/flights/{id}:
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
+ *
+ * /api/flights/me:
  *   get:
- *     summary: Get flight by ID
+ *     summary: Lấy danh sách chuyến bay cá nhân
+ *     description: Trả về toàn bộ lịch sử bay của operator hiện tại (được sắp xếp theo thời gian mới nhất).
  *     tags: [Flight]
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Flight ID
  *     responses:
  *       200:
- *         description: Flight details
+ *         description: List of personal flights
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Flight'
- *       404:
- *         $ref: '#/components/responses/ErrorResponse'
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Flight'
  *       401:
- *         $ref: '#/components/responses/ErrorResponse'
- */
-
-/**
- * @swagger
- * /api/flights/{id}:
- *   put:
- *     summary: Update flight by ID
- *     tags: [Flight]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Flight ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CreateFlightRequest'
- *     responses:
- *       200:
- *         description: Flight updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Flight'
- *       400:
- *         $ref: '#/components/responses/ErrorResponse'
- *       404:
- *         $ref: '#/components/responses/ErrorResponse'
- *       401:
- *         $ref: '#/components/responses/ErrorResponse'
- */
-
-/**
- * @swagger
- * /api/flights/{id}:
- *   delete:
- *     summary: Delete flight by ID
- *     tags: [Flight]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Flight ID
- *     responses:
- *       200:
- *         description: Flight deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Flight deleted
- *       404:
- *         $ref: '#/components/responses/ErrorResponse'
- *       401:
- *         $ref: '#/components/responses/ErrorResponse'
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
  */
