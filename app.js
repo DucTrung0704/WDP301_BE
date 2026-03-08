@@ -70,6 +70,12 @@ app.use(
   require("./src/modules/flightPlan/flightPlan.routes"),
 ); // flight plan CRUD + conflict detection
 app.use("/api/conflicts", require("./src/modules/conflict/conflict.routes")); // conflict management (admin)
+app.use(
+  "/api/flight-sessions",
+  require("./src/modules/flightSession/flightSession.routes"),
+); // flight session management
+app.use("/api/telemetry", require("./src/modules/telemetry/telemetry.routes")); // telemetry REST fallback
+app.use("/api/alerts", require("./src/modules/alert/alert.routes")); // alert management
 
 /* =========================
    404 HANDLER

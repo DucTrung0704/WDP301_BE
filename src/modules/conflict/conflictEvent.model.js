@@ -6,9 +6,13 @@ const ConflictEventSchema = new mongoose.Schema(
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "FlightPlan",
-        required: true,
       },
     ],
+    flightSession: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "FlightSession",
+      // Optional — only for in-flight (REALTIME) conflicts
+    },
     detectedAt: {
       type: Date,
       default: Date.now,
@@ -36,7 +40,7 @@ const ConflictEventSchema = new mongoose.Schema(
     },
     detectionMethod: {
       type: String,
-      enum: ["PAIRWISE", "SEGMENTATION", "ZONE_VIOLATION"],
+      enum: ["PAIRWISE", "SEGMENTATION", "ZONE_VIOLATION", "REALTIME"],
       required: true,
     },
     horizontalDistance: {

@@ -501,6 +501,116 @@ const options = {
             approved: { type: "boolean", example: true },
           },
         },
+        FlightSessionResponse: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            flightPlan: { $ref: "#/components/schemas/FlightPlanResponse" },
+            drone: { $ref: "#/components/schemas/Drone" },
+            pilot: { $ref: "#/components/schemas/User" },
+            sessionType: {
+              type: "string",
+              enum: ["PLANNED", "FREE_FLIGHT"],
+            },
+            status: {
+              type: "string",
+              enum: [
+                "STARTING",
+                "IN_PROGRESS",
+                "COMPLETED",
+                "ABORTED",
+                "EMERGENCY_LANDED",
+              ],
+            },
+            actualStart: { type: "string", format: "date-time" },
+            actualEnd: { type: "string", format: "date-time" },
+            actualRoute: {
+              type: "object",
+              properties: {
+                type: { type: "string", example: "LineString" },
+                coordinates: {
+                  type: "array",
+                  items: {
+                    type: "array",
+                    items: { type: "number" },
+                  },
+                },
+              },
+            },
+            notes: { type: "string" },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
+          },
+        },
+        AlertResponse: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            flightSession: { type: "string" },
+            drone: { $ref: "#/components/schemas/Drone" },
+            type: {
+              type: "string",
+              enum: [
+                "CONFLICT",
+                "ZONE_VIOLATION",
+                "DEVIATION",
+                "BATTERY_LOW",
+                "CONNECTION_LOST",
+              ],
+            },
+            severity: {
+              type: "string",
+              enum: ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+            },
+            message: { type: "string" },
+            location: {
+              type: "object",
+              properties: {
+                type: { type: "string", example: "Point" },
+                coordinates: {
+                  type: "array",
+                  items: { type: "number" },
+                  example: [106.6297, 10.8231],
+                },
+              },
+            },
+            altitude: { type: "number" },
+            data: {
+              type: "object",
+              description:
+                "Chi tiết bổ sung tùy loại alert (conflictEventId, zoneId, deviationDistance, batteryLevel, etc.)",
+            },
+            status: {
+              type: "string",
+              enum: ["ACTIVE", "ACKNOWLEDGED", "RESOLVED"],
+            },
+            createdAt: { type: "string", format: "date-time" },
+          },
+        },
+        TelemetryResponse: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            drone: { type: "string" },
+            flightSession: { type: "string" },
+            timestamp: { type: "string", format: "date-time" },
+            location: {
+              type: "object",
+              properties: {
+                type: { type: "string", example: "Point" },
+                coordinates: {
+                  type: "array",
+                  items: { type: "number" },
+                  example: [106.6297, 10.8231],
+                },
+              },
+            },
+            altitude: { type: "number", example: 100 },
+            speed: { type: "number", example: 15 },
+            heading: { type: "number", example: 180 },
+            batteryLevel: { type: "number", example: 85 },
+          },
+        },
       },
     },
   },

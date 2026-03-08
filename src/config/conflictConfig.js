@@ -20,9 +20,15 @@ module.exports = {
 
   // Severity thresholds
   severity: {
-    CRITICAL_DISTANCE: 30, // < 30m → CRITICAL
-    HIGH_DISTANCE: 60, // < 60m → HIGH
-    MEDIUM_DISTANCE: 100, // < 100m → MEDIUM
-    // >= 100m → LOW (nếu vẫn trong vùng cảnh báo)
+    CRITICAL_DISTANCE: 30, // meters
+    HIGH_DISTANCE: 60,
+    MEDIUM_DISTANCE: 100,
+  },
+
+  // In-flight detection thresholds
+  inflight: {
+    DEVIATION_THRESHOLD: 100, // meters — max deviation from planned route
+    BATTERY_LOW_THRESHOLD: 20, // percent
+    PROXIMITY_CHECK_RADIUS: 200, // meters — radius to check nearby drones
   },
 };
