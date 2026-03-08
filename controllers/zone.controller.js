@@ -133,6 +133,93 @@ exports.getZones = async (req, res) => {
   }
 };
 
+// GET Zone by ID
+exports.getZoneById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const zone = await Zone.findById(id);
+
+    if (!zone) {
+      return res.status(404).json({ message: "Zone not found" });
+    }
+
+    res.json(zone);
+  } catch (err) {
+    console.error("Get Zone By ID Error:", err);
+    if (err.name === "CastError") {
+      return res.status(400).json({ message: "Invalid zone ID format" });
+    }
+    res.status(500).json({ message: "Failed to retrieve zone" });
+  }
+};
+
+// UPDATE Zone
+exports.updateZone = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      description,
+      type,
+      geometry,
+      minAltitude,
+      maxAltitude,
+      effectiveFrom,
+      effectiveTo,
+      status,
+    } = req.body;
+
+    // Find the zone first
+    const zone = await Zone.findById(id);
+
+    if (!zone) {
+      return res.status(404).json({ message: "Zone not found" });
+    }
+
+    // Check if zone is archived - prevent editing archived zones
+    if (zone.status === "archived") {
+      return res.status(400).json({ message: "Cannot edit an archived zone" });
+    }
+
+    // Update fields if provided
+    if (name !== undefined) zone.name = name;
+    if (description !== undefined) zone.description = description;
+    if (type !== undefined) zone.type = type;
+    if (geometry !== undefined) zone.geometry = geometry;
+    if (minAltitude !== undefined) zone.minAltitude = minAltitude;
+    if (maxAltitude !== undefined) zone.maxAltitude = maxAltitude;
+    if (effectiveFrom !== undefined) zone.effectiveFrom = effectiveFrom;
+    if (effectiveTo !== undefined) zone.effectiveTo = effectiveTo;
+    if (status !== undefined && status !== "archived") zone.status = status;
+
+    // Save will trigger pre-save validation (polygon closure, self-intersection)
+    const updatedZone = await zone.save();
+
+    res.json(updatedZone);
+  } catch (err) {
+    console.error("Update Zone Error:", err);
+    // Handle Mongoose Validation Errors
+    if (err.name === "ValidationError") {
+      return res.status(400).json({ message: err.message });
+    }
+    // Handle CastError (invalid ObjectId)
+    if (err.name === "CastError") {
+      return res.status(400).json({ message: "Invalid zone ID format" });
+    }
+    // Handle GeoJSON Validation Errors from Pre-save
+    if (
+      err.message.startsWith("Invalid Polygon") ||
+      err.message.startsWith("GeoJSON")
+    ) {
+      return res.status(400).json({ message: err.message });
+    }
+    res
+      .status(500)
+      .json({ message: "Failed to update zone", error: err.message });
+  }
+};
+
 // CHECK Spatial Status
 exports.checkPoint = async (req, res) => {
   try {

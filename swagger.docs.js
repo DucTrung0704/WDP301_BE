@@ -1267,6 +1267,175 @@
 /**
  * @swagger
  * /api/zones/{id}:
+ *   get:
+ *     summary: Lấy chi tiết một zone theo ID
+ *     tags: [Zones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: MongoDB ObjectId của zone
+ *         example: "507f1f77bcf86cd799439011"
+ *     responses:
+ *       200:
+ *         description: Lấy chi tiết thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ZoneResponse'
+ *       400:
+ *         description: ID không hợp lệ
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               message: "Invalid zone ID format"
+ *       401:
+ *         description: Không được xác thực
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Không tìm thấy zone
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               message: "Zone not found"
+ *       500:
+ *         description: Lỗi server
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *
+ *   put:
+ *     summary: Cập nhật thông tin một zone
+ *     description: |
+ *       Cập nhật zone với các field được cung cấp. Chỉ cần gửi các field muốn thay đổi.
+ *       **Lưu ý:**
+ *       - Không thể edit zone đã bị archived
+ *       - Không thể đổi status thành 'archived' qua endpoint này (sử dụng DELETE để archive)
+ *       - Nếu thay đổi geometry, validation polygon (closed, không tự cắt) sẽ được thực hiện
+ *     tags: [Zones]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: MongoDB ObjectId của zone cần cập nhật
+ *         example: "507f1f77bcf86cd799439011"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Tên mới của zone
+ *                 example: "Updated Zone Name"
+ *               description:
+ *                 type: string
+ *                 description: Mô tả mới
+ *                 example: "Updated description"
+ *               type:
+ *                 type: string
+ *                 enum: [no_fly, restricted]
+ *                 description: Loại zone
+ *                 example: "restricted"
+ *               geometry:
+ *                 $ref: '#/components/schemas/GeoJSONPolygon'
+ *               minAltitude:
+ *                 type: number
+ *                 minimum: 0
+ *                 description: Độ cao tối thiểu (meters)
+ *                 example: 0
+ *               maxAltitude:
+ *                 type: number
+ *                 minimum: 0
+ *                 description: Độ cao tối đa (meters)
+ *                 example: 5000
+ *               effectiveFrom:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Thời gian bắt đầu hiệu lực
+ *                 example: "2026-02-01T00:00:00Z"
+ *               effectiveTo:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Thời gian hết hiệu lực
+ *                 example: "2027-02-01T00:00:00Z"
+ *               status:
+ *                 type: string
+ *                 enum: [active, inactive]
+ *                 description: "Trạng thái zone (không thể set thành 'archived')"
+ *                 example: "active"
+ *           example:
+ *             name: "Updated Airport Zone"
+ *             description: "Updated no-fly zone description"
+ *             maxAltitude: 5000
+ *             status: "active"
+ *     responses:
+ *       200:
+ *         description: Cập nhật thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ZoneResponse'
+ *       400:
+ *         description: Dữ liệu không hợp lệ
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             examples:
+ *               invalidId:
+ *                 value:
+ *                   message: "Invalid zone ID format"
+ *               archivedZone:
+ *                 value:
+ *                   message: "Cannot edit an archived zone"
+ *               invalidPolygon:
+ *                 value:
+ *                   message: "Invalid Polygon: Self-intersection detected."
+ *               altitudeError:
+ *                 value:
+ *                   message: "maxAltitude must be greater than or equal to minAltitude."
+ *       401:
+ *         description: Không được xác thực
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Không tìm thấy zone
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               message: "Zone not found"
+ *       500:
+ *         description: Lỗi server
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               message: "Failed to update zone"
+ *
  *   delete:
  *     summary: Xoá (archive) một zone
  *     description: |
@@ -1322,18 +1491,11 @@
 
 /**
  * @swagger
- * tags:
- *   name: Flight
- *   description: Quản lý lịch sử chuyến bay (Dành cho INDIVIDUAL_OPERATOR và FLEET_OPERATOR)
- */
-
-/**
- * @swagger
  * /api/flights:
  *   post:
  *     summary: Tạo mới một bản ghi chuyến bay
  *     description: Ghi nhận một chuyến bay mới vào hệ thống. Yêu cầu drone phải thuộc sở hữu của người tạo.
- *     tags: [Flight]
+ *     tags: [Flights]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -1390,7 +1552,7 @@
  *   get:
  *     summary: Lấy danh sách chuyến bay cá nhân
  *     description: Trả về toàn bộ lịch sử bay của operator hiện tại (được sắp xếp theo thời gian mới nhất).
- *     tags: [Flight]
+ *     tags: [Flights]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -1404,6 +1566,506 @@
  *                 $ref: '#/components/schemas/Flight'
  *       401:
  *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
+ */
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Flight Plans
+ *     description: Quản lý kế hoạch bay với quỹ đạo 4D và phát hiện xung đột tự động (Conflict Detection)
+ *   - name: Conflicts
+ *     description: Quản lý các sự kiện xung đột giữa các kế hoạch bay (chỉ UTM_ADMIN)
+ */
+
+/**
+ * @swagger
+ * /api/flight-plans:
+ *   post:
+ *     summary: Tạo mới kế hoạch bay (DRAFT)
+ *     description: |
+ *       Tạo một flight plan mới ở trạng thái DRAFT với danh sách waypoints 4D.
+ *       Hệ thống tự động tạo routeGeometry (GeoJSON LineString) từ waypoints.
+ *       Yêu cầu ít nhất 2 waypoint (takeoff và land).
+ *     tags: [Flight Plans]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateFlightPlanRequest'
+ *           example:
+ *             drone: "507f1f77bcf86cd799439011"
+ *             plannedStart: "2026-01-20T08:00:00Z"
+ *             plannedEnd: "2026-01-20T09:00:00Z"
+ *             priority: 1
+ *             waypoints:
+ *               - sequenceNumber: 1
+ *                 latitude: 10.8231
+ *                 longitude: 106.6297
+ *                 altitude: 50
+ *                 speed: 0
+ *                 estimatedTime: "2026-01-20T08:00:00Z"
+ *                 action: "TAKEOFF"
+ *               - sequenceNumber: 2
+ *                 latitude: 10.8300
+ *                 longitude: 106.6400
+ *                 altitude: 100
+ *                 speed: 15
+ *                 estimatedTime: "2026-01-20T08:30:00Z"
+ *                 action: "WAYPOINT"
+ *               - sequenceNumber: 3
+ *                 latitude: 10.8350
+ *                 longitude: 106.6450
+ *                 altitude: 50
+ *                 speed: 10
+ *                 estimatedTime: "2026-01-20T09:00:00Z"
+ *                 action: "LAND"
+ *             notes: "Routine inspection flight plan"
+ *     responses:
+ *       201:
+ *         description: Flight plan created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/FlightPlanResponse'
+ *       400:
+ *         description: Validation error (missing fields, < 2 waypoints, plannedEnd <= plannedStart)
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - không sở hữu drone
+ *       404:
+ *         description: Drone not found
+ *       500:
+ *         description: Internal server error
+ *
+ *   get:
+ *     summary: Danh sách kế hoạch bay của user hiện tại
+ *     description: Lấy danh sách flight plans với pagination và filter theo status.
+ *     tags: [Flight Plans]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: status
+ *         in: query
+ *         schema:
+ *           type: string
+ *           enum: [DRAFT, PENDING, APPROVED, REJECTED, CANCELLED]
+ *         description: Filter theo trạng thái flight plan
+ *       - name: page
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - name: limit
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/FlightPlanResponse'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     currentPage:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     totalCount:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     hasNextPage:
+ *                       type: boolean
+ *                     hasPrevPage:
+ *                       type: boolean
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
+ */
+
+/**
+ * @swagger
+ * /api/flight-plans/{id}:
+ *   get:
+ *     summary: Chi tiết kế hoạch bay
+ *     tags: [Flight Plans]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/FlightPlanResponse'
+ *       400:
+ *         description: Invalid flight plan ID
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Flight plan not found
+ *
+ *   put:
+ *     summary: Cập nhật kế hoạch bay (chỉ DRAFT/REJECTED)
+ *     description: |
+ *       Cập nhật flight plan. Chỉ cho phép khi status là DRAFT hoặc REJECTED.
+ *       Nếu plan đang REJECTED, sẽ tự động reset về DRAFT và dismiss các conflicts cũ.
+ *     tags: [Flight Plans]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               drone:
+ *                 type: string
+ *               plannedStart:
+ *                 type: string
+ *                 format: date-time
+ *               plannedEnd:
+ *                 type: string
+ *                 format: date-time
+ *               priority:
+ *                 type: integer
+ *               waypoints:
+ *                 type: array
+ *                 items:
+ *                   $ref: '#/components/schemas/Waypoint'
+ *               notes:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/FlightPlanResponse'
+ *       400:
+ *         description: Cannot update (wrong status or validation error)
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - không sở hữu flight plan
+ *       404:
+ *         description: Flight plan not found
+ *
+ *   delete:
+ *     summary: Xóa kế hoạch bay (chỉ DRAFT)
+ *     tags: [Flight Plans]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Deleted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Flight plan deleted successfully"
+ *       400:
+ *         description: Cannot delete (wrong status)
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Flight plan not found
+ */
+
+/**
+ * @swagger
+ * /api/flight-plans/{id}/submit:
+ *   post:
+ *     summary: Submit kế hoạch bay để kiểm tra xung đột
+ *     description: |
+ *       Submit flight plan (DRAFT → detect → APPROVED/REJECTED).
+ *       Hệ thống chạy 3 loại kiểm tra:
+ *       1. **Pairwise 4D Trajectory**: So sánh từng cặp quỹ đạo
+ *       2. **Airspace Segmentation**: Grid cells + time slots occupancy map
+ *       3. **Zone Violation**: Kiểm tra đi qua vùng cấm bay
+ *
+ *       Nếu không có xung đột → APPROVED. Nếu có → REJECTED kèm danh sách conflicts.
+ *     tags: [Flight Plans]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Submit result (approved or rejected with conflicts)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SubmitFlightPlanResponse'
+ *             examples:
+ *               approved:
+ *                 summary: Flight plan approved
+ *                 value:
+ *                   message: "Flight plan approved — no conflicts detected"
+ *                   approved: true
+ *                   conflicts: []
+ *               rejected:
+ *                 summary: Flight plan rejected
+ *                 value:
+ *                   message: "Flight plan rejected — conflicts detected"
+ *                   approved: false
+ *       400:
+ *         description: Cannot submit (wrong status or < 2 waypoints)
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Flight plan not found
+ *       500:
+ *         description: Internal server error
+ */
+
+/**
+ * @swagger
+ * /api/flight-plans/{id}/cancel:
+ *   post:
+ *     summary: Hủy kế hoạch bay (DRAFT/REJECTED → CANCELLED)
+ *     tags: [Flight Plans]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Cancelled
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Flight plan cancelled"
+ *                 flightPlan:
+ *                   $ref: '#/components/schemas/FlightPlanResponse'
+ *       400:
+ *         description: Cannot cancel (wrong status)
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Flight plan not found
+ */
+
+/**
+ * @swagger
+ * /api/flight-plans/{id}/conflicts:
+ *   get:
+ *     summary: Xem danh sách xung đột của kế hoạch bay
+ *     tags: [Flight Plans]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of conflict events
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/ConflictEventResponse'
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Flight plan not found
+ *       500:
+ *         description: Internal server error
+ */
+
+/**
+ * @swagger
+ * /api/conflicts:
+ *   get:
+ *     summary: Danh sách tất cả conflict events (chỉ UTM_ADMIN)
+ *     tags: [Conflicts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: status
+ *         in: query
+ *         schema:
+ *           type: string
+ *           enum: [ACTIVE, RESOLVED, DISMISSED]
+ *         description: Filter theo trạng thái conflict
+ *       - name: method
+ *         in: query
+ *         schema:
+ *           type: string
+ *           enum: [PAIRWISE, SEGMENTATION, ZONE_VIOLATION]
+ *         description: Filter theo phương pháp phát hiện
+ *       - name: page
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - name: limit
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/ConflictEventResponse'
+ *                 pagination:
+ *                   type: object
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - chỉ UTM_ADMIN
+ *       500:
+ *         description: Internal server error
+ *
+ * /api/conflicts/{id}:
+ *   get:
+ *     summary: Chi tiết conflict event (chỉ UTM_ADMIN)
+ *     tags: [Conflicts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ConflictEventResponse'
+ *       400:
+ *         description: Invalid conflict ID
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Conflict event not found
+ *
+ * /api/conflicts/{id}/resolve:
+ *   put:
+ *     summary: Resolve conflict event (chỉ UTM_ADMIN)
+ *     description: Đánh dấu conflict là đã giải quyết, kèm ghi chú resolution.
+ *     tags: [Conflicts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [resolution]
+ *             properties:
+ *               resolution:
+ *                 type: string
+ *                 description: Mô tả cách giải quyết xung đột
+ *                 example: "Flight plan A đã được điều chỉnh waypoint để tránh xung đột"
+ *     responses:
+ *       200:
+ *         description: Conflict resolved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Conflict resolved"
+ *                 conflict:
+ *                   $ref: '#/components/schemas/ConflictEventResponse'
+ *       400:
+ *         description: Conflict already resolved/dismissed, or missing resolution
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Conflict event not found
  *       500:
  *         description: Internal server error
  */
