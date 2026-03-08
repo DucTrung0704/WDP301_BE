@@ -65,6 +65,11 @@ app.use("/api/users", require("./routes/user.routes")); // User explicit profile
 app.use("/api/drones", require("./routes/drone.routes")); // drone CRUD
 app.use("/api/zones", require("./routes/zone.routes")); // zone CRUD
 app.use("/api/flights", require("./routes/flight.routes")); // flight history
+app.use(
+  "/api/flight-plans",
+  require("./src/modules/flightPlan/flightPlan.routes"),
+); // flight plan CRUD + conflict detection
+app.use("/api/conflicts", require("./src/modules/conflict/conflict.routes")); // conflict management (admin)
 
 /* =========================
    404 HANDLER
