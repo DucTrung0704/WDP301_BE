@@ -2069,3 +2069,546 @@
  *       500:
  *         description: Internal server error
  */
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Flight Sessions
+ *     description: Quản lý phiên bay thực tế (PLANNED hoặc FREE_FLIGHT)
+ *   - name: Telemetry
+ *     description: Dữ liệu bay realtime từ drone (REST fallback cho WebSocket)
+ *   - name: Alerts
+ *     description: Cảnh báo in-flight (conflict, zone violation, deviation, battery, connection)
+ */
+
+/**
+ * @swagger
+ * /api/flight-sessions/start:
+ *   post:
+ *     summary: Bắt đầu phiên bay theo kế hoạch (PLANNED)
+ *     description: |
+ *       Tạo FlightSession từ FlightPlan đã APPROVED.
+ *       Drone phải ở trạng thái IDLE. Tự động chuyển drone → FLYING.
+ *     tags: [Flight Sessions]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [flightPlanId]
+ *             properties:
+ *               flightPlanId:
+ *                 type: string
+ *                 example: "507f1f77bcf86cd799439011"
+ *     responses:
+ *       201:
+ *         description: Session started
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/FlightSessionResponse'
+ *       400:
+ *         description: Plan not APPROVED, drone not IDLE, or drone already has active session
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Flight plan or drone not found
+ */
+
+/**
+ * @swagger
+ * /api/flight-sessions/free-flight:
+ *   post:
+ *     summary: Bắt đầu bay tự do (FREE_FLIGHT — chỉ INDIVIDUAL_OPERATOR)
+ *     description: |
+ *       Tạo FlightSession không cần FlightPlan.
+ *       Chỉ INDIVIDUAL_OPERATOR mới được sử dụng endpoint này.
+ *       Drone phải thuộc sở hữu của operator và ở trạng thái IDLE.
+ *     tags: [Flight Sessions]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [droneId]
+ *             properties:
+ *               droneId:
+ *                 type: string
+ *                 example: "507f1f77bcf86cd799439011"
+ *     responses:
+ *       201:
+ *         description: Free flight session started
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/FlightSessionResponse'
+ *       403:
+ *         description: Chỉ INDIVIDUAL_OPERATOR hoặc không sở hữu drone
+ *       400:
+ *         description: Drone not IDLE or already has active session
+ *       404:
+ *         description: Drone not found
+ */
+
+/**
+ * @swagger
+ * /api/flight-sessions:
+ *   get:
+ *     summary: Danh sách phiên bay
+ *     description: Operator xem session của mình, Admin xem tất cả.
+ *     tags: [Flight Sessions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: status
+ *         in: query
+ *         schema:
+ *           type: string
+ *           enum: [STARTING, IN_PROGRESS, COMPLETED, ABORTED, EMERGENCY_LANDED]
+ *       - name: sessionType
+ *         in: query
+ *         schema:
+ *           type: string
+ *           enum: [PLANNED, FREE_FLIGHT]
+ *       - name: page
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - name: limit
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/FlightSessionResponse'
+ *                 pagination:
+ *                   type: object
+ *       401:
+ *         description: Unauthorized
+ */
+
+/**
+ * @swagger
+ * /api/flight-sessions/{id}:
+ *   get:
+ *     summary: Chi tiết phiên bay
+ *     tags: [Flight Sessions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/FlightSessionResponse'
+ *       400:
+ *         description: Invalid session ID
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Session not found
+ */
+
+/**
+ * @swagger
+ * /api/flight-sessions/{id}/end:
+ *   post:
+ *     summary: Kết thúc phiên bay → COMPLETED
+ *     description: |
+ *       Đánh dấu session COMPLETED, drone → IDLE.
+ *       Tự động build actualRoute từ dữ liệu telemetry.
+ *     tags: [Flight Sessions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Session completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Flight session completed"
+ *                 flightSession:
+ *                   $ref: '#/components/schemas/FlightSessionResponse'
+ *       400:
+ *         description: Cannot end (wrong status)
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Session not found
+ */
+
+/**
+ * @swagger
+ * /api/flight-sessions/{id}/abort:
+ *   post:
+ *     summary: Hủy phiên bay → ABORTED
+ *     tags: [Flight Sessions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Session aborted
+ *       400:
+ *         description: Cannot abort (wrong status)
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Session not found
+ */
+
+/**
+ * @swagger
+ * /api/flight-sessions/{id}/emergency:
+ *   post:
+ *     summary: Hạ cánh khẩn cấp → EMERGENCY_LANDED
+ *     tags: [Flight Sessions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Emergency landing recorded
+ *       400:
+ *         description: Cannot emergency land (wrong status)
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Session not found
+ */
+
+/**
+ * @swagger
+ * /api/flight-sessions/{id}/telemetry:
+ *   get:
+ *     summary: Lấy dữ liệu telemetry của phiên bay
+ *     tags: [Flight Sessions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: page
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - name: limit
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           default: 100
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/TelemetryResponse'
+ *                 totalCount:
+ *                   type: integer
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Session not found
+ */
+
+/**
+ * @swagger
+ * /api/flight-sessions/{id}/alerts:
+ *   get:
+ *     summary: Lấy danh sách cảnh báo của phiên bay
+ *     tags: [Flight Sessions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: type
+ *         in: query
+ *         schema:
+ *           type: string
+ *           enum: [CONFLICT, ZONE_VIOLATION, DEVIATION, BATTERY_LOW, CONNECTION_LOST]
+ *       - name: status
+ *         in: query
+ *         schema:
+ *           type: string
+ *           enum: [ACTIVE, ACKNOWLEDGED, RESOLVED]
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 alerts:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/AlertResponse'
+ *                 totalCount:
+ *                   type: integer
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Session not found
+ */
+
+/**
+ * @swagger
+ * /api/telemetry:
+ *   post:
+ *     summary: Gửi telemetry qua REST (fallback khi WebSocket không khả dụng)
+ *     description: |
+ *       Lưu dữ liệu telemetry + trigger in-flight conflict detection.
+ *       Ưu tiên dùng WebSocket (`ws://host/ws`) cho realtime.
+ *     tags: [Telemetry]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [sessionId, lat, lng, altitude]
+ *             properties:
+ *               sessionId:
+ *                 type: string
+ *               lat:
+ *                 type: number
+ *                 example: 10.8231
+ *               lng:
+ *                 type: number
+ *                 example: 106.6297
+ *               altitude:
+ *                 type: number
+ *                 example: 100
+ *               speed:
+ *                 type: number
+ *                 example: 15
+ *               heading:
+ *                 type: number
+ *                 example: 180
+ *               batteryLevel:
+ *                 type: number
+ *                 example: 85
+ *     responses:
+ *       201:
+ *         description: Telemetry saved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TelemetryResponse'
+ *       400:
+ *         description: Missing fields or session not IN_PROGRESS
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Session not found
+ *
+ * /api/telemetry/{sessionId}:
+ *   get:
+ *     summary: Lấy lịch sử telemetry của phiên bay
+ *     tags: [Telemetry]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: sessionId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: page
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - name: limit
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           default: 100
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/TelemetryResponse'
+ *                 totalCount:
+ *                   type: integer
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Session not found
+ */
+
+/**
+ * @swagger
+ * /api/alerts:
+ *   get:
+ *     summary: Danh sách cảnh báo
+ *     description: Operator xem alert của session mình, Admin xem tất cả.
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: flightSession
+ *         in: query
+ *         schema:
+ *           type: string
+ *         description: Filter theo session ID
+ *       - name: type
+ *         in: query
+ *         schema:
+ *           type: string
+ *           enum: [CONFLICT, ZONE_VIOLATION, DEVIATION, BATTERY_LOW, CONNECTION_LOST]
+ *       - name: status
+ *         in: query
+ *         schema:
+ *           type: string
+ *           enum: [ACTIVE, ACKNOWLEDGED, RESOLVED]
+ *       - name: page
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - name: limit
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/AlertResponse'
+ *                 pagination:
+ *                   type: object
+ *       401:
+ *         description: Unauthorized
+ *
+ * /api/alerts/{id}:
+ *   get:
+ *     summary: Chi tiết cảnh báo
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AlertResponse'
+ *       400:
+ *         description: Invalid alert ID
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Alert not found
+ *
+ * /api/alerts/{id}/acknowledge:
+ *   put:
+ *     summary: Xác nhận cảnh báo (ACTIVE → ACKNOWLEDGED)
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Alert acknowledged
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Alert acknowledged"
+ *                 alert:
+ *                   $ref: '#/components/schemas/AlertResponse'
+ *       400:
+ *         description: Alert already acknowledged/resolved
+ *       404:
+ *         description: Alert not found
+ */
