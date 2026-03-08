@@ -1,159 +1,117 @@
-1️⃣ Bối cảnh áp dụng (nhắc lại cho đúng ICAO Level 3)
+# Strategic Conflict Detection (ICAO Level 3)
 
-Cả Pairwise Conflict Detection và Airspace Segmentation đều được dùng cho:
+## 1. Bối cảnh áp dụng
 
-UTM ICAO Level 3 – Strategic Deconfliction
+Cả **Pairwise Conflict Detection** và **Airspace Segmentation** đều được ứng dụng trong:
 
-Giai đoạn pre-flight
+- **UTM ICAO Level 3:** Strategic Deconfliction (Phân tách xung đột chiến lược).
+- **Giai đoạn:** Pre-flight (Trước khi bay).
+- **Dựa trên:** Quỹ đạo bay 4D (4D Flight Plan).
+- **Đặc điểm:** Không xét điều khiển thời gian thực (real-time).
 
-Dựa trên 4D flight plan
+> [!IMPORTANT]
+> **Mục tiêu chung:** Phát hiện vi phạm khoảng cách an toàn (loss of separation) giữa các UAV trước khi cấp phép bay vào hệ thống.
 
-Không xét điều khiển real-time
+---
 
-📌 Mục tiêu chung:
+## 2. Thuật toán 1: Pairwise 4D Trajectory Conflict Detection
 
-Phát hiện loss of separation giữa các UAV trước khi cấp phép bay.
+### 📌 Nguyên lý
 
-2️⃣ Thuật toán 1: Pairwise 4D Trajectory Conflict Detection
-📌 Nguyên lý
+So sánh trực tiếp từng cặp UAV tại các thời điểm rời rạc trong suốt lộ trình bay để kiểm tra khoảng cách an toàn.
 
-So sánh từng cặp UAV tại các thời điểm rời rạc để kiểm tra khoảng cách an toàn.
+### 📥 Input
 
-📥 Input
+- **Tập kế hoạch bay UAV:** $U = \{U_1, U_2, \dots, U_n\}$
+- **Quỹ đạo 4D mỗi UAV:** $(x(t), y(t), z(t), t)$
+- **Ngưỡng an toàn (Separation Thresholds):**
+  - Khoảng cách ngang ($D_{min}$)
+  - Khoảng cách đứng ($H_{min}$)
 
-Tập kế hoạch bay UAV:
-U = {U1, U2, …, Un}
+### ⚙️ Các bước thực hiện
 
-Mỗi UAV có quỹ đạo 4D:
-(x(t), y(t), z(t), t)
+1.  Duyệt qua từng cặp UAV $(i, j)$ trong danh sách.
+2.  Xác định khoảng thời gian bay chồng lấn giữa hai UAV.
+3.  Chia thời gian thành các bước nhỏ $\Delta t$.
+4.  Tại mỗi thời điểm $t$:
+    - Tính khoảng cách ngang $d_{xy}$ và khoảng cách đứng $d_z$.
+    - **Nếu:** $d_{xy} < D_{min}$ **VÀ** $d_z < H_{min} \rightarrow$ **Xung đột được xác định.**
 
-Ngưỡng an toàn:
+### 📤 Output
 
-Khoảng cách ngang D_min
+- Danh sách các cặp UAV xung đột.
+- Thời điểm và vị trí cụ thể xảy ra xung đột.
 
-Khoảng cách đứng H_min
+### ⚖️ Đánh giá
 
-⚙️ Các bước
+| ✅ Ưu điểm                                         | ❌ Nhược điểm                                    |
+| :------------------------------------------------- | :----------------------------------------------- |
+| Dễ hiểu, dễ cài đặt và triển khai.                 | Độ phức tạp thuật toán cao: $O(n^2)$.            |
+| Phù hợp với nhóm nhỏ hoặc kịch bản ít UAV.         | Khó mở rộng khi mật độ UAV trong không phận cao. |
+| Là phương pháp nền tảng (baseline) tốt để so sánh. |                                                  |
 
-Duyệt từng cặp UAV (i, j)
+---
 
-Kiểm tra khoảng thời gian bay chồng lấn
+## 3. Thuật toán 2: Airspace Segmentation–based Conflict Detection
 
-Chia thời gian thành các bước Δt
+### 📌 Nguyên lý
 
-Tại mỗi t:
+Không phận được chia thành các ô lưới (cells) 3D và các khoảng thời gian (time slots). Xung đột được xác định nếu có từ hai UAV trở lên cùng chiếm một cell tại một time slot nhất định.
 
-Tính d_xy và d_z
+### 📥 Input
 
-Nếu:
+- Không phận 3D đã được phân vùng (Grid-based).
+- Thời gian được chia thành các slot $\Delta t$.
+- Quỹ đạo 4D của các UAV.
 
-d_xy < D_min AND d_z < H_min
+### ⚙️ Các bước thực hiện
 
-→ phát hiện xung đột
+1.  **Voxelization:** Chia không gian thành các cell nhỏ $(x, y, z)$.
+2.  **Time Slotting:** Chia thời gian thành các slot tương ứng.
+3.  Với mỗi UAV tại mỗi thời điểm $t$:
+    - Gán UAV vào cell tương ứng dựa trên tọa độ.
+    - Tạo bản đồ chiếm dụng (**Occupancy Map**).
+4.  **Kiểm tra:** Nếu một cặp (cell, time) chứa $\ge 2$ UAV $\rightarrow$ **Xung đột được xác định.**
 
-📤 Output
+### 📤 Output
 
-Cặp UAV xung đột
+- Danh sách các cell xảy ra xung đột.
+- Thời gian xảy ra xung đột.
+- Danh sách các UAV liên quan trong từng cell.
 
-Thời điểm xảy ra
+### ⚖️ Đánh giá
 
-Vị trí xung đột
+| ✅ Ưu điểm                                        | ❌ Nhược điểm                                    |
+| :------------------------------------------------ | :----------------------------------------------- |
+| Hiệu suất cao, độ phức tạp xấp xỉ $O(n)$.         | Phụ thuộc nhiều vào kích thước cell (Grid size). |
+| Rất phù hợp với môi trường có mật độ UAV dày đặc. | Có thể xảy ra sai số do rời rạc hóa.             |
+| Trực quan và dễ dàng mở rộng quy mô.              | Cần thuật toán bổ trợ xử lý UAV ở biên cell.     |
 
-✅ Ưu điểm
+---
 
-Dễ hiểu, dễ cài đặt
+## 4. So sánh tổng hợp
 
-Phù hợp nhóm nhỏ, số UAV ít
+| Tiêu chí              | Pairwise Case                 | Airspace Segmentation                    |
+| :-------------------- | :---------------------------- | :--------------------------------------- |
+| **Cách tiếp cận**     | So sánh từng cặp trực tiếp    | Dựa trên chiếm dụng không gian/thời gian |
+| **Mô hình**           | Liên tục (theo mẫu thời gian) | Rời rạc hóa (Grid-based)                 |
+| **Độ chính xác**      | Cao                           | Phụ thuộc vào kích thước Cell            |
+| **Độ phức tạp**       | $O(n^2)$                      | $\approx O(n)$                           |
+| **Mật độ UAV**        | Thấp                          | Trung bình - Cao                         |
+| **Độ khó cài đặt**    | Dễ                            | Trung bình                               |
+| **Tính trực quan**    | Trung bình                    | Cao                                      |
+| **Phù hợp Level 3**   | ✅ Có                         | ✅ Có                                    |
+| **Giá trị học thuật** | Cơ bản                        | Cao hơn (Optimization)                   |
 
-Là baseline tốt để so sánh
+---
 
-❌ Nhược điểm
+## 5. Định hướng ứng dụng trong Đồ án
 
-Độ phức tạp O(n²)
+Trong đồ án này, chúng ta sẽ kết hợp cả hai phương pháp để tối ưu hóa kết quả:
 
-Khó mở rộng khi mật độ UAV cao
+- **Phương pháp Pairwise:** Sử dụng làm **Baseline** (phương pháp tham chiếu) để kiểm chứng độ chính xác và áp dụng cho các kịch bản thử nghiệm quy mô nhỏ.
+- **Phương pháp Segmentation:** Sử dụng làm **Thuật toán chính** để giải quyết các kịch bản mật độ cao, chứng minh khả năng mở rộng của hệ thống UTM.
 
-3️⃣ Thuật toán 2: Airspace Segmentation–based Conflict Detection
-📌 Nguyên lý
-
-Không phận được chia thành các cell 3D và time slot.
-Xung đột xảy ra nếu nhiều UAV chiếm cùng cell tại cùng time slot.
-
-📥 Input
-
-Không phận 3D đã phân vùng
-
-Thời gian chia thành các slot Δt
-
-Quỹ đạo UAV 4D
-
-⚙️ Các bước
-
-Chia không gian thành các cell (x, y, z)
-
-Chia thời gian thành các slot
-
-Với mỗi UAV tại mỗi t:
-
-Gán UAV vào cell tương ứng
-
-Tạo occupancy map
-
-Nếu 1 cell–time có ≥ 2 UAV → conflict
-
-📤 Output
-
-Cell xảy ra xung đột
-
-Thời gian
-
-Danh sách UAV liên quan
-
-✅ Ưu điểm
-
-Độ phức tạp gần O(n)
-
-Rất phù hợp mật độ UAV cao
-
-Trực quan, dễ mở rộng
-
-❌ Nhược điểm
-
-Phụ thuộc kích thước cell
-
-Có sai số rời rạc
-
-Cần xử lý UAV ở biên cell
-
-4️⃣ So sánh tổng hợp (bảng chuẩn đồ án)
-Tiêu chí Pairwise Airspace Segmentation
-Cách tiếp cận So sánh từng cặp Chiếm dụng cell
-Mô hình Liên tục (theo mẫu thời gian) Rời rạc
-Độ chính xác Cao Phụ thuộc cell
-Độ phức tạp O(n²) ≈ O(n)
-Mật độ UAV Thấp Trung bình – cao
-Dễ cài đặt Rất dễ Trung bình
-Trực quan Trung bình Cao
-Phù hợp Level 3 ✅ ✅
-Giá trị học thuật Cơ bản Cao hơn
-5️⃣ Cách dùng CẢ HAI trong đồ án (rất khôn)
-
-👉 Pairwise:
-
-Dùng làm baseline
-
-Áp dụng cho số UAV ít
-
-So sánh độ chính xác
-
-👉 Segmentation:
-
-Thuật toán chính
-
-Áp dụng cho kịch bản mật độ cao
-
-Chứng minh khả năng mở rộng
-
-📌 Ghi trong đồ án:
-
-“Thuật toán pairwise được sử dụng làm phương pháp tham chiếu, trong khi airspace segmentation được đề xuất nhằm cải thiện khả năng mở rộng cho quản lý UAV mật độ cao.”
+> [!TIP]
+> **Cách ghi trong đồ án:**
+> "Thuật toán **Pairwise** được sử dụng làm phương pháp tham chiếu (reference method) để đảm bảo tính chính xác, trong khi **Airspace Segmentation** được đề xuất như một giải pháp tối ưu nhằm cải thiện hiệu suất và khả năng mở rộng cho bài toán quản lý UAV mật độ cao."
