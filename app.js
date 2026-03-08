@@ -38,8 +38,6 @@ app.use(
   }),
 );
 
-
-
 app.use(logger("dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -63,6 +61,7 @@ app.use(
 ========================= */
 app.use("/api/auth", require("./routes/auth.routes")); // login / register
 app.use("/api/admin", require("./routes/admin.routes")); // admin CRUD accounts
+app.use("/api/users", require("./routes/user.routes")); // User explicit profile management and admin CRUD
 app.use("/api/drones", require("./routes/drone.routes")); // drone CRUD
 app.use("/api/zones", require("./routes/zone.routes")); // zone CRUD
 app.use("/api/flights", require("./routes/flight.routes")); // flight history
