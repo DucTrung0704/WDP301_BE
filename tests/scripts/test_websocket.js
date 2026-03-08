@@ -1,5 +1,5 @@
 /**
- * Manual WebSocket Test Script
+ * Manual Socket.IO Test Script
  *
  * Usage:
  *   1. Start server: npm run dev
@@ -7,18 +7,18 @@
  *   3. Run: node tests/scripts/test_websocket.js <JWT_TOKEN> <SESSION_ID>
  *
  * This script:
- *   - Connects to WebSocket server
+ *   - Connects to Socket.IO server
  *   - Authenticates with JWT
  *   - Watches a session for alerts
  *   - Sends simulated telemetry every 10 seconds
  *   - Prints all received messages
  */
 
-const WebSocket = require("ws");
+const { io } = require("socket.io-client");
 
 const JWT_TOKEN = process.argv[2];
 const SESSION_ID = process.argv[3];
-const WS_URL = process.env.WS_URL || "ws://localhost:3000/ws";
+const WS_URL = process.env.WS_URL || "http://localhost:3000";
 
 if (!JWT_TOKEN || !SESSION_ID) {
   console.log("Usage: node test_websocket.js <JWT_TOKEN> <SESSION_ID>");
@@ -34,16 +34,23 @@ if (!JWT_TOKEN || !SESSION_ID) {
   process.exit(1);
 }
 
-console.log(`Connecting to ${WS_URL}?token=${JWT_TOKEN.substring(0, 20)}...`);
+console.log(
+  `Connecting to ${WS_URL} with path /ws and token ${JWT_TOKEN.substring(0, 20)}...`,
+);
 
-const ws = new WebSocket(`${WS_URL}?token=${JWT_TOKEN}`);
+const socket = io(WS_URL, {
+  path: "/ws",
+  auth: {
+    token: JWT_TOKEN,
+  },
+});
 
-ws.on("open", () => {
-  console.log("✅ WebSocket connected!\n");
+socket.on("connect", () => {
+  console.log("✅ Socket.IO connected!\n");
 
   // Watch the session for alerts
   console.log(`📡 Watching session: ${SESSION_ID}`);
-  ws.send(JSON.stringify({ type: "watch_session", sessionId: SESSION_ID }));
+  socket.emit("watch_session", { sessionId: SESSION_ID });
 
   // Simulate telemetry every 10 seconds
   let counter = 0;
@@ -53,7 +60,6 @@ ws.on("open", () => {
   const interval = setInterval(() => {
     counter++;
     const telemetryData = {
-      type: "telemetry",
       sessionId: SESSION_ID,
       data: {
         lat: baseLat + counter * 0.001, // Move north
@@ -69,46 +75,56 @@ ws.on("open", () => {
       `\n📤 [${new Date().toISOString()}] Sending telemetry #${counter}:`,
       JSON.stringify(telemetryData.data, null, 2),
     );
-    ws.send(JSON.stringify(telemetryData));
+    socket.emit("telemetry", telemetryData);
 
     // Stop after 30 iterations (5 minutes)
     if (counter >= 30) {
       console.log("\n⏹️  Test complete (30 iterations)");
       clearInterval(interval);
-      ws.close();
+      socket.disconnect();
     }
   }, 10000);
 });
 
-ws.on("message", (data) => {
-  try {
-    const msg = JSON.parse(data.toString());
-    const timestamp = new Date().toISOString();
+socket.on("connected", (data) => {
+  console.log(
+    `\n📩 [${new Date().toISOString()}] Connected Event:`,
+    JSON.stringify(data),
+  );
+});
 
-    if (msg.type === "alert") {
-      console.log(`\n🚨 [${timestamp}] ALERT RECEIVED:`);
-      console.log(`   Type: ${msg.alert.type}`);
-      console.log(`   Severity: ${msg.alert.severity}`);
-      console.log(`   Message: ${msg.alert.message}`);
-      if (msg.alert.data) {
-        console.log(`   Data:`, JSON.stringify(msg.alert.data, null, 4));
-      }
-    } else if (msg.type === "telemetry_ack") {
-      console.log(`   ✅ Telemetry ACK: ${msg.telemetryId}`);
-    } else {
-      console.log(`\n📩 [${timestamp}] ${msg.type}:`, JSON.stringify(msg));
-    }
-  } catch (err) {
-    console.log("Raw message:", data.toString());
+socket.on("watching", (data) => {
+  console.log(
+    `\n📩 [${new Date().toISOString()}] Watching Event:`,
+    JSON.stringify(data),
+  );
+});
+
+socket.on("alert", (msg) => {
+  const timestamp = new Date().toISOString();
+  console.log(`\n🚨 [${timestamp}] ALERT RECEIVED:`);
+  console.log(`   Type: ${msg.type}`);
+  console.log(`   Severity: ${msg.severity}`);
+  console.log(`   Message: ${msg.message}`);
+  if (msg.data) {
+    console.log(`   Data:`, JSON.stringify(msg.data, null, 4));
   }
 });
 
-ws.on("close", (code, reason) => {
-  console.log(`\n🔌 Connection closed (code: ${code}, reason: ${reason})`);
+socket.on("telemetry_ack", (msg) => {
+  console.log(`   ✅ Telemetry ACK: ${msg.telemetryId}`);
+});
+
+socket.on("error", (err) => {
+  console.log(`\n❌ [${new Date().toISOString()}] ERROR RECEIVED:`, err);
+});
+
+socket.on("disconnect", (reason) => {
+  console.log(`\n🔌 Connection closed (reason: ${reason})`);
   process.exit(0);
 });
 
-ws.on("error", (err) => {
-  console.error("❌ WebSocket error:", err.message);
+socket.on("connect_error", (err) => {
+  console.error("❌ Socket.IO connection error:", err.message);
   process.exit(1);
 });
