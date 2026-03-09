@@ -116,7 +116,7 @@ FlightPlanSchema.path("plannedEnd").validate(function (value) {
 }, "plannedEnd must be after plannedStart.");
 
 // Pre-save: auto-generate routeGeometry from waypoints
-FlightPlanSchema.pre("save", function (next) {
+FlightPlanSchema.pre("save", function () {
   if (this.waypoints && this.waypoints.length >= 2) {
     // Sort waypoints by sequenceNumber
     const sorted = [...this.waypoints].sort(
@@ -128,7 +128,6 @@ FlightPlanSchema.pre("save", function (next) {
       coordinates: sorted.map((wp) => [wp.longitude, wp.latitude]),
     };
   }
-  next();
 });
 
 module.exports = mongoose.model("FlightPlan", FlightPlanSchema);
