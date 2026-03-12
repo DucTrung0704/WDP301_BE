@@ -28,6 +28,12 @@ var websocket = require("../src/config/websocket");
 websocket.init(server);
 
 /**
+ * Start mock drone simulation (global, persists to Redis)
+ */
+var mockDroneService = require("../src/modules/nearby/mockDroneService");
+mockDroneService.startMockDroneSimulation();
+
+/**
  * Listen on provided port, on all network interfaces.
  */
 
@@ -50,6 +56,10 @@ process.on("SIGINT", async () => {
     } catch (err) {
       console.error("Error during websocket shutdown:", err);
     }
+
+    process.exit(0);
+    // Stop mock drone simulation
+    mockDroneService.stopMockDroneSimulation();
 
     process.exit(0);
   });

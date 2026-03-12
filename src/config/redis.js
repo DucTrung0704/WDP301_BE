@@ -94,6 +94,13 @@ const REDIS_KEYS = {
      * Value: STRING (IDLE, FLYING, CHARGING, etc)
      */
     droneStatus: (droneId) => `drone:${droneId}:status`,
+
+    /**
+     * Mock drone latest location (for nearby display simulation)
+     * Key: mock:drone:{id}:location
+     * Value: JSON { droneId, lat, lng, alt, speed, heading, ts }
+     */
+    mockDroneLocation: (id) => `mock:drone:${id}:location`,
 };
 
 /**
@@ -108,6 +115,7 @@ const cacheOps = {
             const key = REDIS_KEYS.droneLocation(droneId);
             const value = JSON.stringify({
                 ...locationData,
+                droneId,
                 ts: Date.now(),
             });
             await redisClient.setex(key, ttlSeconds, value);
@@ -181,6 +189,48 @@ const cacheOps = {
         } catch (err) {
             console.error("Cache get flight plan error:", err);
             return null;
+        }
+    },
+
+    /**
+     * Set mock drone location with TTL
+     */
+    setMockDroneLocation: async (id, locationData, ttlSeconds = 3600) => {
+        try {
+            const key = REDIS_KEYS.mockDroneLocation(id);
+            const value = JSON.stringify({
+                ...locationData,
+                droneId: id,
+                ts: Date.now(),
+            });
+            await redisClient.setex(key, ttlSeconds, value);
+            return true;
+        } catch (err) {
+            console.error("Cache set mock drone error:", err);
+            return false;
+        }
+    },
+
+    /**
+     * Get all mock drone locations
+     */
+    getAllMockDroneLocations: async () => {
+        try {
+            const pattern = "mock:drone:*:location";
+            const keys = await redisClient.keys(pattern);
+
+            if (keys.length === 0) return [];
+
+            const locations = await Promise.all(
+                keys.map((key) => redisClient.get(key))
+            );
+
+            return locations
+                .filter((loc) => loc !== null)
+                .map((loc) => JSON.parse(loc));
+        } catch (err) {
+            console.error("Cache get all mock drones error:", err);
+            return [];
         }
     },
 

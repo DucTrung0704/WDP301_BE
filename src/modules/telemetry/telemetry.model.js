@@ -10,7 +10,6 @@ const TelemetrySchema = new mongoose.Schema(
     flightSession: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "FlightSession",
-      required: true,
     },
     timestamp: {
       type: Date,

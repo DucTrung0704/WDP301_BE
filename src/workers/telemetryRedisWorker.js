@@ -178,7 +178,7 @@ let consumerRunning = false;
 const connectAndConsume = async () => {
     try {
         // ========== CONNECT MONGODB ==========
-        await mongoose.connect(process.env.MONGODB_URI || "mongodb://localhost:27017/utm", {
+        await mongoose.connect(process.env.MONGO_URI || "mongodb://localhost:27017/utm", {
             maxPoolSize: 50,
             minPoolSize: 10,
             serverSelectionTimeoutMS: 5000,
