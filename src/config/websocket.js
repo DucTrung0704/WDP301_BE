@@ -1,9 +1,10 @@
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
-const { processTelemetry } = require("../modules/telemetry/telemetry.service");
+const { cacheOps, streamOps, REDIS_KEYS } = require("./redis");
 const { setWsBroadcast } = require("../modules/alert/alert.service");
 
 let io; // Hold the socket.io server instance
+let redisReady = false; // Redis connectivity flag
 
 /**
  * Initialize Socket.IO server on existing HTTP server
@@ -19,6 +20,9 @@ function init(httpServer) {
   });
 
   console.log("Socket.IO server initialized on /ws");
+
+  // Initialize Redis streams
+  initializeRedisStreams();
 
   // Setup broadcast function for alert service
   setWsBroadcast(broadcastToSession);
@@ -60,28 +64,57 @@ function init(httpServer) {
     // Handle telemetry data
     socket.on("telemetry", async (msg) => {
       try {
-        const { sessionId, data: telData } = msg;
+        const { droneId, lat, lng, alt, speed, heading, batteryLevel, timestamp } = msg;
 
-        if (!sessionId || !telData) {
-          socket.emit("error", { message: "sessionId and data are required" });
+        // ========== VALIDATION ==========
+        if (!droneId || lat === undefined || lng === undefined) {
+          socket.emit("error", { message: "Missing required fields: droneId, lat, lng" });
           return;
         }
 
-        const telemetry = await processTelemetry(sessionId, {
-          lat: telData.lat,
-          lng: telData.lng,
-          altitude: telData.altitude,
-          speed: telData.speed,
-          heading: telData.heading,
-          batteryLevel: telData.batteryLevel,
+        // ========== CACHE LATEST LOCATION IN REDIS ==========
+        await cacheOps.setDroneLocation(droneId, {
+          lat,
+          lng,
+          alt: alt || 0,
+          speed: speed || 0,
+          heading: heading || 0,
+          batteryLevel: batteryLevel || 0,
+        }, 3600); // 1 hour TTL
+
+        // ========== SEND TO REDIS STREAM (NON-BLOCKING) ==========
+        if (redisReady) {
+          streamOps
+            .addTelemetry({
+              droneId,
+              lat,
+              lng,
+              alt: alt || 0,
+              speed: speed || 0,
+              heading: heading || 0,
+              batteryLevel: batteryLevel || 0,
+              timestamp: timestamp || Date.now(),
+              sourceGateway: socket.id,
+              sourceUser: socket.user.id,
+            })
+            .catch((err) => {
+              console.error(`❌ Failed to add telemetry to Redis stream for drone ${droneId}:`, err.message);
+              // Optional: implement retry queue or fallback storage
+            });
+        } else {
+          console.warn("⚠️ Redis streams not ready, message may be buffered");
+        }
+
+        // ========== SEND ACK IMMEDIATELY (< 5ms) ==========
+        socket.emit("telemetry_ack", {
+          droneId,
+          status: "received",
+          ts: Date.now(),
         });
 
-        socket.emit("telemetry_ack", {
-          telemetryId: telemetry._id,
-          timestamp: telemetry.timestamp,
-        });
       } catch (err) {
-        socket.emit("error", { message: err.message });
+        console.error("❌ Telemetry error:", err.message);
+        socket.emit("error", { message: "Processing failed" });
       }
     });
 
@@ -129,4 +162,34 @@ function broadcastToSession(sessionId, message) {
   }
 }
 
-module.exports = { init };
+/**
+ * Initialize Redis Streams
+ */
+async function initializeRedisStreams() {
+  try {
+    await streamOps.createConsumerGroup();
+    redisReady = true;
+    console.log("✅ Redis Streams initialized");
+  } catch (err) {
+    console.error("❌ Failed to initialize Redis Streams:", err.message);
+    // Retry after 5 seconds
+    setTimeout(initializeRedisStreams, 5000);
+  }
+}
+
+/**
+ * Graceful shutdown
+ */
+async function shutdown() {
+  console.log("\n📛 Shutting down Socket.IO...");
+  try {
+    if (io) {
+      io.close();
+      console.log("✅ Socket.IO closed");
+    }
+  } catch (err) {
+    console.error("Error during shutdown:", err);
+  }
+}
+
+module.exports = { init, shutdown };

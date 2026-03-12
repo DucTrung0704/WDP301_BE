@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   processTelemetry,
   getSessionTelemetry,
+  getAggregatedTelemetry,
 } = require("./telemetry.service");
 const FlightSession = require("../flightSession/flightSession.model");
 const {
@@ -87,6 +88,43 @@ router.get(
       });
 
       return res.json(result);
+    } catch (err) {
+      return res.status(500).json({ message: err.message });
+    }
+  },
+);
+
+/**
+ * GET /api/telemetry/:sessionId/aggregated
+ * Get aggregated telemetry data (min/max/avg) for analytics/dashboards
+ * Supports time-based bucketing to reduce data transfer
+ */
+router.get(
+  "/:sessionId/aggregated",
+  authorizeRoles("INDIVIDUAL_OPERATOR", "FLEET_OPERATOR", "UTM_ADMIN"),
+  async (req, res) => {
+    try {
+      // Ownership check
+      const session = await FlightSession.findById(req.params.sessionId);
+      if (!session) {
+        return res.status(404).json({ message: "Flight session not found" });
+      }
+      if (
+        req.user.role !== "UTM_ADMIN" &&
+        session.pilot.toString() !== req.user.id.toString()
+      ) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      // Bucket size in milliseconds (default: 60 seconds)
+      const bucketSize = parseInt(req.query.bucketSize) || 60000;
+      const result = await getAggregatedTelemetry(req.params.sessionId, bucketSize);
+
+      return res.json({
+        sessionId: req.params.sessionId,
+        bucketSizeMs: bucketSize,
+        data: result,
+      });
     } catch (err) {
       return res.status(500).json({ message: err.message });
     }
