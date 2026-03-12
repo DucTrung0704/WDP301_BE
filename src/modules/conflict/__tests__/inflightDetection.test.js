@@ -17,10 +17,20 @@ jest.mock("../../telemetry/telemetry.model");
 jest.mock("../../../../models/zone.model");
 jest.mock("../../alert/alert.service");
 jest.mock("../../flightPlan/flightPlan.model");
+jest.mock("../../../config/redis", () => ({
+  cacheOps: {
+    getAllDroneLocations: jest.fn(),
+    setDroneLocation: jest.fn(),
+    getDroneLocation: jest.fn(),
+  },
+  streamOps: {},
+  REDIS_KEYS: {},
+}));
 
 const ConflictEvent = require("../../conflict/conflictEvent.model");
 const FlightSession = require("../../flightSession/flightSession.model");
 const Telemetry = require("../../telemetry/telemetry.model");
+const { cacheOps } = require("../../../config/redis");
 const Zone = require("../../../../models/zone.model");
 const FlightPlan = require("../../flightPlan/flightPlan.model");
 const { createAlert } = require("../../alert/alert.service");
@@ -57,6 +67,8 @@ describe("In-flight Detection Service", () => {
     jest.clearAllMocks();
     createAlert.mockResolvedValue({ _id: "alert1" });
     ConflictEvent.create = jest.fn().mockResolvedValue({ _id: "conflict1" });
+    // Default: no other drones visible → proximity check returns early
+    cacheOps.getAllDroneLocations.mockResolvedValue([]);
   });
 
   // ====================================
@@ -67,19 +79,19 @@ describe("In-flight Detection Service", () => {
       const session = makeSession();
       const telemetry = makeTelemetry(10.8231, 106.6297, 100);
 
-      // Another drone very close (same location)
-      FlightSession.find = jest.fn().mockResolvedValue([
-        {
-          _id: "session2",
-          drone: "drone2",
-          flightPlan: "plan2",
-          status: "IN_PROGRESS",
-        },
+      // Another drone at same position in Redis cache
+      cacheOps.getAllDroneLocations.mockResolvedValue([
+        { droneId: "drone2", lat: 10.8231, lng: 106.6297, alt: 100 },
       ]);
-      Telemetry.findOne = jest.fn().mockReturnValue({
-        sort: jest.fn().mockResolvedValue(
-          makeTelemetry(10.8231, 106.6297, 100), // Same position
-        ),
+      // Map droneId → sessionId (new code uses .select() chain)
+      FlightSession.find = jest.fn().mockReturnValue({
+        select: jest.fn().mockResolvedValue([
+          { _id: "session2", drone: "drone2" },
+        ]),
+      });
+      FlightSession.findById = jest.fn().mockResolvedValue({
+        _id: "session2",
+        flightPlan: "plan2",
       });
 
       await runInflightChecks(session, telemetry);
@@ -103,18 +115,14 @@ describe("In-flight Detection Service", () => {
       const session = makeSession();
       const telemetry = makeTelemetry(10.8231, 106.6297, 100);
 
-      FlightSession.find = jest.fn().mockResolvedValue([
-        {
-          _id: "session2",
-          drone: "drone2",
-          flightPlan: "plan2",
-        },
+      // Another drone ~11km away in Redis cache → no proximity alert
+      cacheOps.getAllDroneLocations.mockResolvedValue([
+        { droneId: "drone2", lat: 10.9231, lng: 106.7297, alt: 100 },
       ]);
-      Telemetry.findOne = jest.fn().mockReturnValue({
-        sort: jest.fn().mockResolvedValue(
-          // ~11km away
-          makeTelemetry(10.9231, 106.7297, 100),
-        ),
+      FlightSession.find = jest.fn().mockReturnValue({
+        select: jest.fn().mockResolvedValue([
+          { _id: "session2", drone: "drone2" },
+        ]),
       });
 
       await runInflightChecks(session, telemetry);
@@ -126,7 +134,8 @@ describe("In-flight Detection Service", () => {
       const session = makeSession();
       const telemetry = makeTelemetry(10.8231, 106.6297, 100);
 
-      FlightSession.find = jest.fn().mockResolvedValue([]);
+      // getAllDroneLocations returns [] by default (set in beforeEach)
+      // proximityCheck returns early → no conflict
 
       await runInflightChecks(session, telemetry);
 

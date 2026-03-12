@@ -10,7 +10,6 @@ const TelemetrySchema = new mongoose.Schema(
     flightSession: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "FlightSession",
-      required: true,
     },
     timestamp: {
       type: Date,
@@ -47,12 +46,25 @@ const TelemetrySchema = new mongoose.Schema(
       min: 0,
       max: 100,
     },
+    // Optional: For sampling/aggregation tracking
+    isSampled: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+    // Auto-delete records after 7 days
+    expireAfterSeconds: 604800 // 7 days in seconds
+  },
 );
 
-// Indexes for real-time spatial queries (future use)
+// Indexes for query optimization
 TelemetrySchema.index({ location: "2dsphere" });
-TelemetrySchema.index({ drone: 1, timestamp: -1 });
+TelemetrySchema.index({ drone: 1, timestamp: -1 }); // Querying by drone + time
+TelemetrySchema.index({ flightSession: 1, timestamp: -1 }); // Session-based queries
+TelemetrySchema.index({ drone: 1, isSampled: 1, timestamp: -1 }); // For sampling queries
+TelemetrySchema.index({ timestamp: 1 }, { expireAfterSeconds: 604800 }); // TTL index
 
 module.exports = mongoose.model("Telemetry", TelemetrySchema);

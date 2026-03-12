@@ -28,12 +28,69 @@ var websocket = require("../src/config/websocket");
 websocket.init(server);
 
 /**
+ * Start mock drone simulation (global, persists to Redis)
+ */
+var mockDroneService = require("../src/modules/nearby/mockDroneService");
+mockDroneService.startMockDroneSimulation();
+
+/**
  * Listen on provided port, on all network interfaces.
  */
 
 server.listen(port);
 server.on("error", onError);
 server.on("listening", onListening);
+
+/**
+ * Graceful shutdown handler
+ */
+process.on("SIGINT", async () => {
+  console.log("\n📛 Received SIGINT, shutting down gracefully...");
+  server.close(async () => {
+    console.log("✅ HTTP server closed");
+
+    // Shutdown websocket and Kafka
+    try {
+      await websocket.shutdown();
+      console.log("✅ WebSocket shutdown complete");
+    } catch (err) {
+      console.error("Error during websocket shutdown:", err);
+    }
+
+    process.exit(0);
+    // Stop mock drone simulation
+    mockDroneService.stopMockDroneSimulation();
+
+    process.exit(0);
+  });
+
+  // Force shutdown after 10 seconds
+  setTimeout(() => {
+    console.error("❌ Forced shutdown after timeout");
+    process.exit(1);
+  }, 10000);
+});
+
+process.on("SIGTERM", async () => {
+  console.log("\n📛 Received SIGTERM, shutting down gracefully...");
+  server.close(async () => {
+    console.log("✅ HTTP server closed");
+
+    try {
+      await websocket.shutdown();
+      console.log("✅ WebSocket shutdown complete");
+    } catch (err) {
+      console.error("Error during websocket shutdown:", err);
+    }
+
+    process.exit(0);
+  });
+
+  setTimeout(() => {
+    console.error("❌ Forced shutdown after timeout");
+    process.exit(1);
+  }, 10000);
+});
 
 /**
  * Normalize a port into a number, string, or false.
