@@ -30,7 +30,6 @@ const WaypointSchema = new mongoose.Schema(
     },
     estimatedTime: {
       type: Date,
-      required: true,
     },
     action: {
       type: String,
@@ -57,14 +56,6 @@ const FlightPlanSchema = new mongoose.Schema(
       type: String,
       enum: ["DRAFT", "PENDING", "APPROVED", "REJECTED", "CANCELLED"],
       default: "DRAFT",
-    },
-    plannedStart: {
-      type: Date,
-      required: true,
-    },
-    plannedEnd: {
-      type: Date,
-      required: true,
     },
     priority: {
       type: Number,
@@ -106,14 +97,9 @@ const FlightPlanSchema = new mongoose.Schema(
 
 // Indexes
 FlightPlanSchema.index({ routeGeometry: "2dsphere" });
-FlightPlanSchema.index({ status: 1, plannedStart: 1, plannedEnd: 1 });
+FlightPlanSchema.index({ status: 1, createdAt: -1 });
 FlightPlanSchema.index({ pilot: 1, status: 1 });
 FlightPlanSchema.index({ drone: 1, status: 1 });
-
-// Validation: plannedEnd > plannedStart
-FlightPlanSchema.path("plannedEnd").validate(function (value) {
-  return value > this.plannedStart;
-}, "plannedEnd must be after plannedStart.");
 
 // Pre-save: auto-generate routeGeometry from waypoints
 FlightPlanSchema.pre("save", function () {

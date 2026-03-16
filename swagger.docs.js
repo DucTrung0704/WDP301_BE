@@ -1574,7 +1574,9 @@
  * @swagger
  * tags:
  *   - name: Flight Plans
- *     description: Quản lý kế hoạch bay với quỹ đạo 4D và phát hiện xung đột tự động (Conflict Detection)
+ *     description: Quản lý route template bay (không chứa lịch thời gian)
+ *   - name: Missions
+ *     description: Quản lý mission và lịch thực thi plan qua MissionPlan
  *   - name: Conflicts
  *     description: Quản lý các sự kiện xung đột giữa các kế hoạch bay (chỉ UTM_ADMIN)
  */
@@ -1585,9 +1587,15 @@
  *   post:
  *     summary: Tạo mới kế hoạch bay (DRAFT)
  *     description: |
- *       Tạo một flight plan mới ở trạng thái DRAFT với danh sách waypoints 4D.
+ *       Tạo một flight plan dạng route template ở trạng thái DRAFT.
+ *       Flight plan không còn chứa thời gian bay tổng thể.
+ *       Lịch bay (plannedStart/plannedEnd) được quản lý ở MissionPlan.
  *       Hệ thống tự động tạo routeGeometry (GeoJSON LineString) từ waypoints.
- *       Yêu cầu ít nhất 2 waypoint (takeoff và land).
+ *       Validation chính:
+ *       - waypoints từ 2 đến 500 điểm
+ *       - sequenceNumber phải liên tục 1..N, không trùng
+ *       - không cho phép segment quá dài
+ *       - altitude waypoint không vượt maxAltitude của drone (nếu có)
  *     tags: [Flight Plans]
  *     security:
  *       - bearerAuth: []
@@ -1599,8 +1607,6 @@
  *             $ref: '#/components/schemas/CreateFlightPlanRequest'
  *           example:
  *             drone: "507f1f77bcf86cd799439011"
- *             plannedStart: "2026-01-20T08:00:00Z"
- *             plannedEnd: "2026-01-20T09:00:00Z"
  *             priority: 1
  *             waypoints:
  *               - sequenceNumber: 1
@@ -1633,7 +1639,7 @@
  *             schema:
  *               $ref: '#/components/schemas/FlightPlanResponse'
  *       400:
- *         description: Validation error (missing fields, < 2 waypoints, plannedEnd <= plannedStart)
+ *         description: Validation error (waypoint/geometry/drone status)
  *       401:
  *         description: Unauthorized
  *       403:
@@ -1737,6 +1743,7 @@
  *     description: |
  *       Cập nhật flight plan. Chỉ cho phép khi status là DRAFT hoặc REJECTED.
  *       Nếu plan đang REJECTED, sẽ tự động reset về DRAFT và dismiss các conflicts cũ.
+ *       Mọi field route template được gửi lên đều được validate lại theo cùng rule như khi tạo mới.
  *     tags: [Flight Plans]
  *     security:
  *       - bearerAuth: []
@@ -1751,24 +1758,7 @@
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               drone:
- *                 type: string
- *               plannedStart:
- *                 type: string
- *                 format: date-time
- *               plannedEnd:
- *                 type: string
- *                 format: date-time
- *               priority:
- *                 type: integer
- *               waypoints:
- *                 type: array
- *                 items:
- *                   $ref: '#/components/schemas/Waypoint'
- *               notes:
- *                 type: string
+ *             $ref: '#/components/schemas/UpdateFlightPlanRequest'
  *     responses:
  *       200:
  *         description: Updated
@@ -1777,7 +1767,7 @@
  *             schema:
  *               $ref: '#/components/schemas/FlightPlanResponse'
  *       400:
- *         description: Cannot update (wrong status or validation error)
+ *         description: Cannot update (wrong status hoặc vi phạm rule validate)
  *       401:
  *         description: Unauthorized
  *       403:
@@ -1821,15 +1811,11 @@
  * @swagger
  * /api/flight-plans/{id}/submit:
  *   post:
- *     summary: Submit kế hoạch bay để kiểm tra xung đột
+ *     summary: Submit kế hoạch bay (DRAFT -> APPROVED)
  *     description: |
- *       Submit flight plan (DRAFT → detect → APPROVED/REJECTED).
- *       Hệ thống chạy 3 loại kiểm tra:
- *       1. **Pairwise 4D Trajectory**: So sánh từng cặp quỹ đạo
- *       2. **Airspace Segmentation**: Grid cells + time slots occupancy map
- *       3. **Zone Violation**: Kiểm tra đi qua vùng cấm bay
- *
- *       Nếu không có xung đột → APPROVED. Nếu có → REJECTED kèm danh sách conflicts.
+ *       Submit flight plan route template sau khi validate lại dữ liệu route.
+ *       Scheduling và kiểm tra chồng lấn theo thời gian được xử lý ở MissionPlan.
+ *       Không chạy conflict/time checks ở bước submit plan.
  *     tags: [Flight Plans]
  *     security:
  *       - bearerAuth: []
@@ -1841,7 +1827,7 @@
  *           type: string
  *     responses:
  *       200:
- *         description: Submit result (approved or rejected with conflicts)
+ *         description: Submit result (approved)
  *         content:
  *           application/json:
  *             schema:
@@ -1859,7 +1845,7 @@
  *                   message: "Flight plan rejected — conflicts detected"
  *                   approved: false
  *       400:
- *         description: Cannot submit (wrong status or < 2 waypoints)
+ *         description: Cannot submit (wrong status hoặc vi phạm validate)
  *       401:
  *         description: Unauthorized
  *       403:
@@ -1938,6 +1924,270 @@
  *         description: Flight plan not found
  *       500:
  *         description: Internal server error
+ */
+
+/**
+ * @swagger
+ * /api/missions:
+ *   post:
+ *     summary: Tạo mission mới (chỉ FLEET_OPERATOR)
+ *     tags: [Missions]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateMissionRequest'
+ *     responses:
+ *       201:
+ *         description: Mission created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MissionResponse'
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *
+ *   get:
+ *     summary: Danh sách mission của user hiện tại
+ *     tags: [Missions]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/MissionResponse'
+ *
+ * /api/missions/{id}:
+ *   get:
+ *     summary: Chi tiết mission + danh sách MissionPlan
+ *     tags: [Missions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Success
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 mission:
+ *                   $ref: '#/components/schemas/MissionResponse'
+ *                 missionPlans:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/MissionPlanResponse'
+ *       404:
+ *         description: Mission not found
+ *
+ * /api/missions/{id}/start:
+ *   post:
+ *     summary: Bắt đầu mission và chạy check theo lịch MissionPlan
+ *     description: |
+ *       Khi start mission, hệ thống mới thực hiện các kiểm tra:
+ *       - Pairwise trajectory conflicts giữa các plan trong mission
+ *       - Segmentation conflicts
+ *       - Zone violations theo plannedStart/plannedEnd của MissionPlan
+ *
+ *       Nếu có blocking issues, mission không được start và trả về details.
+ *     tags: [Missions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Mission started
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Mission started successfully"
+ *                 mission:
+ *                   $ref: '#/components/schemas/MissionResponse'
+ *       400:
+ *         description: Blocking conflicts/zone violations or invalid mission state
+ *       404:
+ *         description: Mission not found
+ *
+ *   put:
+ *     summary: Cập nhật mission
+ *     tags: [Missions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               status:
+ *                 type: string
+ *                 enum: [DRAFT, ACTIVE, ARCHIVED]
+ *     responses:
+ *       200:
+ *         description: Updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MissionResponse'
+ *
+ *   delete:
+ *     summary: Xóa mission (kèm toàn bộ MissionPlan liên quan)
+ *     tags: [Missions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Mission deleted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Mission deleted successfully"
+ *                 missionId:
+ *                   type: string
+ *       404:
+ *         description: Mission not found
+ *
+ * /api/missions/{id}/plans:
+ *   post:
+ *     summary: Thêm flight plan vào mission với lịch thời gian
+ *     description: Một flight plan có thể dùng lại ở nhiều mission.
+ *     tags: [Missions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateMissionPlanRequest'
+ *     responses:
+ *       201:
+ *         description: Mission plan created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MissionPlanResponse'
+ *       400:
+ *         description: Validation error (time overlap, invalid time, duplicate plan in mission)
+ *
+ * /api/missions/{id}/plans/{missionPlanId}:
+ *   put:
+ *     summary: Cập nhật lịch của MissionPlan
+ *     tags: [Missions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: missionPlanId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               plannedStart:
+ *                 type: string
+ *                 format: date-time
+ *               plannedEnd:
+ *                 type: string
+ *                 format: date-time
+ *               order:
+ *                 type: integer
+ *               status:
+ *                 type: string
+ *                 enum: [SCHEDULED, CANCELLED]
+ *               notes:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Mission plan updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MissionPlanResponse'
+ *
+ *   delete:
+ *     summary: Xóa một MissionPlan khỏi mission
+ *     tags: [Missions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: missionPlanId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Removed
  */
 
 /**
