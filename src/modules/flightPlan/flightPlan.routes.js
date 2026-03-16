@@ -7,7 +7,7 @@ const {
 const flightPlanController = require("./flightPlan.controller");
 
 // Tất cả routes yêu cầu authentication
-// Chỉ INDIVIDUAL_OPERATOR và FLEET_OPERATOR được tạo/sửa/submit flight plans
+// Chỉ INDIVIDUAL_OPERATOR và FLEET_OPERATOR được tạo/sửa/submit flight plan templates
 
 // Tạo flight plan mới (DRAFT)
 router.post(
@@ -41,7 +41,7 @@ router.put(
   flightPlanController.updateFlightPlan,
 );
 
-// Submit flight plan → conflict detection
+// Submit flight plan template
 router.post(
   "/:id/submit",
   authenticate,

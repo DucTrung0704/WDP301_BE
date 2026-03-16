@@ -326,15 +326,14 @@ const options = {
         },
         Waypoint: {
           type: "object",
-          required: [
-            "sequenceNumber",
-            "latitude",
-            "longitude",
-            "altitude",
-            "estimatedTime",
-          ],
+          required: ["sequenceNumber", "latitude", "longitude", "altitude"],
           properties: {
-            sequenceNumber: { type: "integer", example: 1 },
+            sequenceNumber: {
+              type: "integer",
+              minimum: 1,
+              example: 1,
+              description: "Must be unique and continuous from 1..N",
+            },
             latitude: {
               type: "number",
               minimum: -90,
@@ -363,6 +362,8 @@ const options = {
               type: "string",
               format: "date-time",
               example: "2026-01-20T08:00:00Z",
+              description:
+                "Optional. Suggested ETA for visualization/planning only.",
             },
             action: {
               type: "string",
@@ -373,22 +374,14 @@ const options = {
         },
         CreateFlightPlanRequest: {
           type: "object",
-          required: ["drone", "plannedStart", "plannedEnd", "waypoints"],
+          required: ["drone", "waypoints"],
+          description:
+            "Route template only (no schedule time). Schedule is managed in MissionPlan.",
           properties: {
             drone: {
               type: "string",
               example: "507f1f77bcf86cd799439011",
               description: "ObjectId of the drone",
-            },
-            plannedStart: {
-              type: "string",
-              format: "date-time",
-              example: "2026-01-20T08:00:00Z",
-            },
-            plannedEnd: {
-              type: "string",
-              format: "date-time",
-              example: "2026-01-20T09:00:00Z",
             },
             priority: {
               type: "integer",
@@ -400,11 +393,40 @@ const options = {
             waypoints: {
               type: "array",
               minItems: 2,
+              maxItems: 500,
               items: { $ref: "#/components/schemas/Waypoint" },
             },
             notes: {
               type: "string",
               example: "Routine inspection flight plan",
+            },
+          },
+        },
+        UpdateFlightPlanRequest: {
+          type: "object",
+          description:
+            "Partial update for route template fields. No plan-level time fields.",
+          properties: {
+            drone: {
+              type: "string",
+              example: "507f1f77bcf86cd799439011",
+              description: "ObjectId of the drone",
+            },
+            priority: {
+              type: "integer",
+              minimum: 1,
+              maximum: 10,
+              example: 1,
+            },
+            waypoints: {
+              type: "array",
+              minItems: 2,
+              maxItems: 500,
+              items: { $ref: "#/components/schemas/Waypoint" },
+            },
+            notes: {
+              type: "string",
+              example: "Updated route due to temporary restriction",
             },
           },
         },
@@ -418,8 +440,6 @@ const options = {
               type: "string",
               enum: ["DRAFT", "PENDING", "APPROVED", "REJECTED", "CANCELLED"],
             },
-            plannedStart: { type: "string", format: "date-time" },
-            plannedEnd: { type: "string", format: "date-time" },
             priority: { type: "integer" },
             waypoints: {
               type: "array",
@@ -442,6 +462,53 @@ const options = {
             notes: { type: "string" },
             createdAt: { type: "string", format: "date-time" },
             updatedAt: { type: "string", format: "date-time" },
+          },
+        },
+        MissionResponse: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            name: { type: "string", example: "Morning Fleet Run" },
+            description: { type: "string", example: "Mission for urban delivery routes" },
+            status: { type: "string", enum: ["DRAFT", "ACTIVE", "ARCHIVED"] },
+            createdBy: { $ref: "#/components/schemas/User" },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
+          },
+        },
+        CreateMissionRequest: {
+          type: "object",
+          required: ["name"],
+          properties: {
+            name: { type: "string", example: "Morning Fleet Run" },
+            description: { type: "string", example: "Mission for urban delivery routes" },
+            status: { type: "string", enum: ["DRAFT", "ACTIVE", "ARCHIVED"], example: "DRAFT" },
+          },
+        },
+        MissionPlanResponse: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            mission: { type: "string" },
+            flightPlan: { $ref: "#/components/schemas/FlightPlanResponse" },
+            plannedStart: { type: "string", format: "date-time" },
+            plannedEnd: { type: "string", format: "date-time" },
+            order: { type: "integer", example: 1 },
+            status: { type: "string", enum: ["SCHEDULED", "CANCELLED"] },
+            notes: { type: "string" },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
+          },
+        },
+        CreateMissionPlanRequest: {
+          type: "object",
+          required: ["flightPlanId", "plannedStart", "plannedEnd"],
+          properties: {
+            flightPlanId: { type: "string", example: "507f1f77bcf86cd799439011" },
+            plannedStart: { type: "string", format: "date-time", example: "2026-03-17T01:00:00Z" },
+            plannedEnd: { type: "string", format: "date-time", example: "2026-03-17T02:00:00Z" },
+            order: { type: "integer", minimum: 1, example: 1 },
+            notes: { type: "string", example: "Run this route first" },
           },
         },
         ConflictEventResponse: {

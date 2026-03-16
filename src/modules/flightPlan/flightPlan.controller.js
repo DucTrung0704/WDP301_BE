@@ -162,7 +162,7 @@ exports.submitFlightPlan = async (req, res) => {
       message:
         result.approved ?
           "Flight plan approved — no conflicts detected"
-        : "Flight plan rejected — conflicts detected",
+          : "Flight plan rejected — conflicts detected",
       ...result,
     });
   } catch (err) {
@@ -178,7 +178,8 @@ exports.submitFlightPlan = async (req, res) => {
     }
     if (
       err.message.includes("Cannot submit") ||
-      err.message.includes("must have")
+      err.message.includes("must have") ||
+      err.name === "ValidationError"
     ) {
       return res.status(400).json({ message: err.message });
     }

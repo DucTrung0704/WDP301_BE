@@ -68,7 +68,8 @@ app.use("/api/flights", require("./routes/flight.routes")); // flight history
 app.use(
   "/api/flight-plans",
   require("./src/modules/flightPlan/flightPlan.routes"),
-); // flight plan CRUD + conflict detection
+); // flight plan route templates CRUD
+app.use("/api/missions", require("./src/modules/mission/mission.routes")); // mission + mission plans scheduling
 app.use("/api/conflicts", require("./src/modules/conflict/conflict.routes")); // conflict management (admin)
 app.use(
   "/api/flight-sessions",
