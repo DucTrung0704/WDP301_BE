@@ -166,6 +166,26 @@ async function addPlanToMission(missionId, data, userId, role) {
         plannedEnd,
     });
 
+    const checks = await runMissionAddChecks({
+        missionId: mission._id,
+        flightPlan,
+        plannedStart,
+        plannedEnd,
+    });
+
+    if (checks.hasBlockingIssues) {
+        const err = createValidationError(
+            "Không thể thêm plan vào mission vì phát hiện conflict/zone violation trong khung thời gian đã chọn.",
+        );
+        err.details = {
+            notification: "Conflict được phát hiện ngay khi thêm plan. Vui lòng điều chỉnh thời gian hoặc lộ trình.",
+            pairwiseConflicts: checks.pairwiseConflicts,
+            segmentationConflicts: checks.segmentationConflicts,
+            zoneViolations: checks.zoneViolations,
+        };
+        throw err;
+    }
+
     const missionPlan = await MissionPlan.create({
         mission: mission._id,
         flightPlan: flightPlan._id,
@@ -309,6 +329,69 @@ function deduplicateConflicts(conflicts) {
     return [...map.values()];
 }
 
+function mergeSegmentationWithoutPairwiseDuplicates(
+    pairwiseConflicts,
+    segmentationConflicts,
+) {
+    const deduplicatedSegmentation = deduplicateConflicts(segmentationConflicts);
+
+    const pairwisePairs = new Set(
+        pairwiseConflicts.map((conflict) =>
+            conflict.flightPlans
+                .map((id) => id.toString())
+                .sort()
+                .join("_"),
+        ),
+    );
+
+    return deduplicatedSegmentation.filter((conflict) => {
+        const pairKey = conflict.flightPlans
+            .map((id) => id.toString())
+            .sort()
+            .join("_");
+
+        return !pairwisePairs.has(pairKey);
+    });
+}
+
+async function runMissionAddChecks({ missionId, flightPlan, plannedStart, plannedEnd }) {
+    const existingMissionPlans = await MissionPlan.find({
+        mission: missionId,
+        status: "SCHEDULED",
+    }).populate("flightPlan");
+
+    const candidateMissionPlan = {
+        _id: `candidate_${flightPlan._id.toString()}`,
+        flightPlan,
+        plannedStart,
+        plannedEnd,
+    };
+
+    const candidateTrajectory = mapMissionPlanToScheduledTrajectory(candidateMissionPlan);
+    const existingTrajectories = existingMissionPlans.map(mapMissionPlanToScheduledTrajectory);
+
+    const pairwiseConflicts = deduplicateConflicts(
+        pairwiseConflictCheck(candidateTrajectory, existingTrajectories),
+    );
+
+    const segmentationConflicts = mergeSegmentationWithoutPairwiseDuplicates(
+        pairwiseConflicts,
+        segmentationConflictCheck(candidateTrajectory, existingTrajectories),
+    );
+
+    const zoneViolations = await checkFlightPlanZoneViolations(candidateTrajectory);
+
+    return {
+        pairwiseConflicts,
+        segmentationConflicts,
+        zoneViolations,
+        hasBlockingIssues:
+            pairwiseConflicts.length > 0 ||
+            segmentationConflicts.length > 0 ||
+            zoneViolations.length > 0,
+    };
+}
+
 async function runMissionStartChecks(missionPlans) {
     const scheduledTrajectories = missionPlans.map(mapMissionPlanToScheduledTrajectory);
 
@@ -324,7 +407,10 @@ async function runMissionStartChecks(missionPlans) {
     }
 
     pairwiseConflicts = deduplicateConflicts(pairwiseConflicts);
-    segmentationConflicts = deduplicateConflicts(segmentationConflicts);
+    segmentationConflicts = mergeSegmentationWithoutPairwiseDuplicates(
+        pairwiseConflicts,
+        segmentationConflicts,
+    );
 
     const zoneViolationsNested = await Promise.all(
         scheduledTrajectories.map((trajectory) =>
