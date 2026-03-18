@@ -2003,9 +2003,9 @@
  *     summary: Bắt đầu mission và chạy check theo lịch MissionPlan
  *     description: |
  *       Khi start mission, hệ thống mới thực hiện các kiểm tra:
- *       - Pairwise trajectory conflicts giữa các plan trong mission
- *       - Segmentation conflicts
- *       - Zone violations theo plannedStart/plannedEnd của MissionPlan
+ *       - Xung đột quỹ đạo theo từng cặp giữa các kế hoạch bay trong mission
+ *       - Xung đột phân đoạn
+ *       - Vi phạm vùng bay theo plannedStart/plannedEnd của MissionPlan
  *
  *       Nếu có blocking issues, mission không được start và trả về details.
  *     tags: [Missions]
