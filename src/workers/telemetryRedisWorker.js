@@ -187,7 +187,9 @@ const connectAndConsume = async () => {
         console.log("✅ MongoDB connected");
 
         // ========== CONNECT REDIS ==========
-        await redisClientAsync.connect();
+        if (!redisClientAsync.isOpen) {
+            await redisClientAsync.connect();
+        }
         console.log("✅ Redis connected");
 
         // ========== CREATE CONSUMER GROUP ==========

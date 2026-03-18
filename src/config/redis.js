@@ -5,22 +5,19 @@ const redis = require("redis");
  * Used for caching + telemetry streaming (Redis Streams)
  */
 const redisClient = redis.createClient({
-    host: process.env.REDIS_HOST || "localhost",
-    port: process.env.REDIS_PORT || 6379,
+    socket: {
+        host: process.env.REDIS_HOST || "localhost",
+        port: parseInt(process.env.REDIS_PORT || "6379"),
+        reconnectStrategy: (retries) => {
+            if (retries > 10) {
+                return false;
+            }
+            return Math.min(retries * 100, 3000);
+        },
+    },
+    username: process.env.REDIS_USERNAME || undefined,
     password: process.env.REDIS_PASSWORD || undefined,
     db: parseInt(process.env.REDIS_DB || "0"),
-    retryStrategy: (options) => {
-        if (options.error && options.error.code === "ECONNREFUSED") {
-            return new Error("End of retry.");
-        }
-        if (options.total_retry_time > 1000 * 60 * 60) {
-            return new Error("Retry time exhausted");
-        }
-        if (options.attempt > 10) {
-            return undefined;
-        }
-        return Math.min(options.attempt * 100, 3000);
-    },
 });
 
 redisClient.on("error", (err) => {
@@ -39,11 +36,29 @@ redisClient.on("reconnecting", () => {
 const redisClientAsync = redisClient.duplicate();
 (async () => {
     try {
-        await redisClientAsync.connect();
+        if (!redisClient.isOpen) {
+            await redisClient.connect();
+        }
+        if (!redisClientAsync.isOpen) {
+            await redisClientAsync.connect();
+        }
     } catch (err) {
-        console.error("Failed to connect async Redis client:", err);
+        console.error("Failed to connect Redis clients:", err);
     }
 })();
+
+const ensureRedisReady = () => {
+    if (!redisClient.isOpen || !redisClient.isReady) {
+        return false;
+    }
+    return true;
+};
+
+const ensureStreamClientReady = async () => {
+    if (!redisClientAsync.isOpen) {
+        await redisClientAsync.connect();
+    }
+};
 
 /**
  * Redis key patterns & stream names
@@ -112,13 +127,14 @@ const cacheOps = {
      */
     setDroneLocation: async (droneId, locationData, ttlSeconds = 3600) => {
         try {
+            if (!ensureRedisReady()) return false;
             const key = REDIS_KEYS.droneLocation(droneId);
             const value = JSON.stringify({
                 ...locationData,
                 droneId,
                 ts: Date.now(),
             });
-            await redisClient.setex(key, ttlSeconds, value);
+            await redisClient.setEx(key, ttlSeconds, value);
             return true;
         } catch (err) {
             console.error("Cache set error:", err);
@@ -131,6 +147,7 @@ const cacheOps = {
      */
     getDroneLocation: async (droneId) => {
         try {
+            if (!ensureRedisReady()) return null;
             const key = REDIS_KEYS.droneLocation(droneId);
             const data = await redisClient.get(key);
             return data ? JSON.parse(data) : null;
@@ -145,6 +162,7 @@ const cacheOps = {
      */
     getAllDroneLocations: async () => {
         try {
+            if (!ensureRedisReady()) return [];
             const pattern = "drone:*:location";
             const keys = await redisClient.keys(pattern);
 
@@ -168,9 +186,10 @@ const cacheOps = {
      */
     cacheFlightPlan: async (planId, planData, ttlSeconds = 3600) => {
         try {
+            if (!ensureRedisReady()) return false;
             const key = REDIS_KEYS.flightPlan(planId);
             const value = JSON.stringify(planData);
-            await redisClient.setex(key, ttlSeconds, value);
+            await redisClient.setEx(key, ttlSeconds, value);
             return true;
         } catch (err) {
             console.error("Cache flight plan error:", err);
@@ -183,6 +202,7 @@ const cacheOps = {
      */
     getFlightPlan: async (planId) => {
         try {
+            if (!ensureRedisReady()) return null;
             const key = REDIS_KEYS.flightPlan(planId);
             const data = await redisClient.get(key);
             return data ? JSON.parse(data) : null;
@@ -197,13 +217,14 @@ const cacheOps = {
      */
     setMockDroneLocation: async (id, locationData, ttlSeconds = 3600) => {
         try {
+            if (!ensureRedisReady()) return false;
             const key = REDIS_KEYS.mockDroneLocation(id);
             const value = JSON.stringify({
                 ...locationData,
                 droneId: id,
                 ts: Date.now(),
             });
-            await redisClient.setex(key, ttlSeconds, value);
+            await redisClient.setEx(key, ttlSeconds, value);
             return true;
         } catch (err) {
             console.error("Cache set mock drone error:", err);
@@ -216,6 +237,7 @@ const cacheOps = {
      */
     getAllMockDroneLocations: async () => {
         try {
+            if (!ensureRedisReady()) return [];
             const pattern = "mock:drone:*:location";
             const keys = await redisClient.keys(pattern);
 
@@ -239,6 +261,7 @@ const cacheOps = {
      */
     invalidate: async (pattern) => {
         try {
+            if (!ensureRedisReady()) return 0;
             const keys = await redisClient.keys(pattern);
             if (keys.length > 0) {
                 await redisClient.del(...keys);
@@ -261,6 +284,7 @@ const streamOps = {
      */
     addTelemetry: async (telemetryData) => {
         try {
+            await ensureStreamClientReady();
             const streamKey = REDIS_KEYS.telemetryStream;
             const streamId = await redisClientAsync.xAdd(streamKey, "*", {
                 droneId: telemetryData.droneId,
@@ -288,6 +312,7 @@ const streamOps = {
      */
     createConsumerGroup: async () => {
         try {
+            await ensureStreamClientReady();
             const streamKey = REDIS_KEYS.telemetryStream;
             const groupName = REDIS_KEYS.telemetryGroup;
 
@@ -314,6 +339,7 @@ const streamOps = {
      */
     readStream: async (consumerId, count = 10, blockMs = 1000) => {
         try {
+            await ensureStreamClientReady();
             const streamKey = REDIS_KEYS.telemetryStream;
             const groupName = REDIS_KEYS.telemetryGroup;
 
@@ -341,6 +367,7 @@ const streamOps = {
      */
     ackMessage: async (messageId) => {
         try {
+            await ensureStreamClientReady();
             const streamKey = REDIS_KEYS.telemetryStream;
             const groupName = REDIS_KEYS.telemetryGroup;
 
@@ -355,6 +382,7 @@ const streamOps = {
      */
     getStreamLength: async () => {
         try {
+            await ensureStreamClientReady();
             const streamKey = REDIS_KEYS.telemetryStream;
             return await redisClientAsync.xLen(streamKey);
         } catch (err) {
@@ -368,6 +396,7 @@ const streamOps = {
      */
     getGroupInfo: async () => {
         try {
+            await ensureStreamClientReady();
             const streamKey = REDIS_KEYS.telemetryStream;
             const groupName = REDIS_KEYS.telemetryGroup;
             return await redisClientAsync.xInfoGroups(streamKey);
@@ -382,6 +411,7 @@ const streamOps = {
      */
     trimStream: async (maxLen = 100000) => {
         try {
+            await ensureStreamClientReady();
             const streamKey = REDIS_KEYS.telemetryStream;
             await redisClientAsync.xTrim(streamKey, "MAXLEN", "~", maxLen);
         } catch (err) {
