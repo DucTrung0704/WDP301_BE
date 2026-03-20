@@ -21,15 +21,19 @@ function shouldSampleTelemetry(droneId) {
   const lastTime = lastTelemetryTimes.get(droneId) || 0;
   const timeDelta = now - lastTime;
 
-  // First point or minimum interval passed
-  if (timeDelta >= SAMPLING_CONFIG.minInterval) {
-    // Random sampling (approximate)
-    if (Math.random() * SAMPLING_CONFIG.ratio < 1) {
-      lastTelemetryTimes.set(droneId, now);
-      return true;
-    }
+  // Minimum interval must pass first
+  if (timeDelta < SAMPLING_CONFIG.minInterval) {
+    return false;
   }
-  return false;
+
+  // Reset the window regardless of random outcome to prevent starvation:
+  // without this, failed random checks leave lastTelemetryTimes unchanged,
+  // causing all subsequent calls to keep retrying the random gate on the
+  // same stale window, which can result in data never being saved.
+  lastTelemetryTimes.set(droneId, now);
+
+  // Random sampling (approximate 1/ratio points saved)
+  return Math.random() * SAMPLING_CONFIG.ratio < 1;
 }
 
 /**

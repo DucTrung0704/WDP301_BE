@@ -53,13 +53,14 @@ class TelemetryBatcher {
             return false;
         }
 
-        // Condition 2: Random chance (1/ratio)
-        if (Math.random() * SAMPLING_CONFIG.ratio < 1) {
-            this.lastSavedTime.set(droneId, timestamp);
-            return true;
-        }
+        // Reset the window regardless of random outcome to prevent starvation:
+        // without this, failed random checks leave lastSavedTime unchanged,
+        // causing all subsequent messages to attempt the random gate on the same
+        // stale window, which can result in data never being saved.
+        this.lastSavedTime.set(droneId, timestamp);
 
-        return false;
+        // Condition 2: Random chance (1/ratio)
+        return Math.random() * SAMPLING_CONFIG.ratio < 1;
     }
 
     add(telemetryDoc) {
