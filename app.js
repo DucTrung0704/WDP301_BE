@@ -59,8 +59,9 @@ app.use(
 /* =========================
    ROUTES
 ========================= */
+app.use("/api/favourite", require("./routes/favourite.routes"));
 app.use("/api/sepay", require("./routes/sepay.routes"));
-app.use("/api/packages", require("./routes/package.routes")); // package CRUD
+app.use("/api/packages", require("./routes/package.routes"));
 app.use("/api/auth", require("./routes/auth.routes")); // login / register
 app.use("/api/admin", require("./routes/admin.routes")); // admin CRUD accounts
 app.use("/api/users", require("./routes/user.routes")); // User explicit profile management and admin CRUD

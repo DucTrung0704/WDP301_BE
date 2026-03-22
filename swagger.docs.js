@@ -3244,3 +3244,195 @@
  *       500:
  *         description: Lỗi server
  */
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Favourites
+ *     description: Quản lý địa điểm yêu thích
+ */
+
+/**
+ * @swagger
+ * /api/favourite:
+ *   get:
+ *     summary: Lấy danh sách địa điểm yêu thích của user
+ *     tags: [Favourites]
+ *     parameters:
+ *       - in: query
+ *         name: user_id
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID của người dùng
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   _id:
+ *                     type: string
+ *                   user_id:
+ *                     type: string
+ *                   name:
+ *                     type: string
+ *                   address:
+ *                     type: string
+ *                   numberOfFlight:
+ *                     type: number
+ *                   location:
+ *                     type: object
+ *                     properties:
+ *                       coordinates:
+ *                         type: array
+ *                         items:
+ *                           type: number
+ *                         example: [106.6297, 10.8231]
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/favourite/add:
+ *   post:
+ *     summary: Thêm địa điểm yêu thích mới
+ *     tags: [Favourites]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - user_id
+ *               - location
+ *             properties:
+ *               user_id:
+ *                 type: string
+ *                 example: "60d5ecb8b392d7..."
+ *               name:
+ *                 type: string
+ *                 example: "Công viên Tao Đàn"
+ *               address:
+ *                 type: string
+ *                 example: "Quận 1, TP.HCM"
+ *               numberOfFlight:
+ *                 type: number
+ *                 example: 5
+ *               location:
+ *                 type: object
+ *                 required:
+ *                   - type
+ *                   - coordinates
+ *                 properties:
+ *                   coordinates:
+ *                     type: array
+ *                     items:
+ *                       type: number
+ *                     example: [106.6297, 10.8231]
+ *     responses:
+ *       201:
+ *         description: Thêm thành công
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/favourite/{id}:
+ *   get:
+ *     summary: Lấy địa điểm yêu thích theo ID
+ *     tags: [Favourites]
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: ID của địa điểm yêu thích
+ *         schema:
+ *           type: string
+ *           example: "507f1f77bcf86cd799439011"
+ *     responses:
+ *       200:
+ *         description: Lấy thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 _id:
+ *                   type: string
+ *                   example: "507f1f77bcf86cd799439011"
+ *                 user_id:
+ *                   type: string
+ *                   example: "60d5ecb8b392d7..."
+ *                 name:
+ *                   type: string
+ *                   example: "Công viên Tao Đàn"
+ *                 address:
+ *                   type: string
+ *                   example: "Quận 1, TP.HCM"
+ *                 numberOfFlight:
+ *                   type: number
+ *                   example: 5
+ *                 location:
+ *                   type: object
+ *                   properties:
+ *                     coordinates:
+ *                       type: array
+ *                       items:
+ *                         type: number
+ *                       example: [106.6297, 10.8231]
+ *       404:
+ *         description: Không tìm thấy địa điểm yêu thích
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Không tìm thấy địa điểm yêu thích"
+ *       500:
+ *         description: Lỗi server
+ *
+ *   delete:
+ *     summary: Xóa địa điểm yêu thích theo ID
+ *     tags: [Favourites]
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: ID của địa điểm yêu thích cần xóa
+ *         schema:
+ *           type: string
+ *           example: "507f1f77bcf86cd799439011"
+ *     responses:
+ *       200:
+ *         description: Xóa thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Xóa địa điểm yêu thích thành công"
+ *       404:
+ *         description: Không tìm thấy địa điểm yêu thích
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Không tìm thấy địa điểm yêu thích"
+ *       500:
+ *         description: Lỗi server
+ */
