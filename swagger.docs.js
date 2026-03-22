@@ -2862,3 +2862,248 @@
  *       404:
  *         description: Alert not found
  */
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Sepay
+ *     description: Tích hợp thanh toán Sepay
+ */
+
+/**
+ * @swagger
+ * /api/sepay/payment:
+ *   post:
+ *     summary: Khởi tạo URL thanh toán Sepay
+ *     tags: [Sepay]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [order_description, order_amount, success_url, cancel_url, error_url]
+ *             properties:
+ *               order_description:
+ *                 type: string
+ *                 example: "Thanh toán đơn hàng DH... "
+ *               order_amount:
+ *                 type: number
+ *                 example: 100000
+ *               customer_id:
+ *                 type: string
+ *                 example: "user_123"
+ *               success_url:
+ *                 type: string
+ *                 example: "https://yourdomain.com/success"
+ *               cancel_url:
+ *                 type: string
+ *                 example: "https://yourdomain.com/cancel"
+ *               error_url:
+ *                 type: string
+ *                 example: "https://yourdomain.com/error"
+ *     responses:
+ *       200:
+ *         description: Khởi tạo thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: integer
+ *                   example: 200
+ *                 paymentCheckoutUrl:
+ *                   type: string
+ *                   example: "https://sepay.vn/checkout/..."
+ *                 paymentFormFiels:
+ *                   type: object
+ *                 machant_id:
+ *                   type: string
+ *                 machant_key:
+ *                   type: string
+ *       400:
+ *         description: Không thể tạo mã qr thanh toán
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 code:
+ *                   type: integer
+ *                   example: 400
+ *                 error:
+ *                   type: object
+ *                 message:
+ *                   type: string
+ *                   example: "Không thể tạo mã qr thanh toán"
+ */
+
+/**
+ * @swagger
+ * /api/sepay/webhook:
+ *   post:
+ *     summary: Khởi tạo URL thanh toán Sepay
+ *     tags: [Sepay]
+ *     responses:
+ *       200:
+ *         description: Khởi tạo thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: integer
+ *                   example: 200
+ *                 paymentCheckoutUrl:
+ *                   type: string
+ *                   example: "https://sepay.vn/checkout/..."
+ *                 paymentFormFiels:
+ *                   type: object
+ *                 machant_id:
+ *                   type: string
+ *                 machant_key:
+ *                   type: string
+ *       400:
+ *         description: Không thể tạo mã qr thanh toán
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 code:
+ *                   type: integer
+ *                   example: 400
+ *                 error:
+ *                   type: object
+ *                 message:
+ *                   type: string
+ *                   example: "Không thể tạo mã qr thanh toán"
+ */
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Packages
+ *     description: Quản lý các gói thành viên
+ * 
+ * components:
+ *   schemas:
+ *     Package:
+ *       type: object
+ *       properties:
+ *         _id:
+ *           type: string
+ *         name:
+ *           type: string
+ *           example: "Gói Fleet Operator"
+ *         description:
+ *           type: string
+ *           example: "Gói dành cho đối tác vận hành nhiều thiết bị"
+ *         price:
+ *           type: number
+ *           example: 500000
+ *         status:
+ *           type: string
+ *           enum: [ACTIVE, INACTIVE]
+ *           example: "ACTIVE"
+ * 
+ * /api/packages:
+ *   get:
+ *     summary: Lấy danh sách toàn bộ gói thành viên
+ *     tags: [Packages]
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [ACTIVE, INACTIVE]
+ *         description: Lọc theo trạng thái
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Package'
+ * 
+ *   post:
+ *     summary: Tạo gói thành viên mới (Chỉ Admin)
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Package'
+ *     responses:
+ *       201:
+ *         description: Tạo mới gói thành công
+ * 
+ * /api/packages/{id}:
+ *   get:
+ *     summary: Xem chi tiết một gói thành viên
+ *     tags: [Packages]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lấy dữ liệu thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Package'
+ * 
+ *   put:
+ *     summary: Cập nhật thông tin gói thành viên (Chỉ Admin)
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Package'
+ *     responses:
+ *       200:
+ *         description: Cập nhật thành công
+ * 
+ *   delete:
+ *     summary: Xóa gói thành viên (Chỉ Admin)
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Xóa thành công
+ */
