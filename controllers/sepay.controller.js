@@ -178,4 +178,84 @@ exports.getPaymentHistory = async (req, res) => {
             message: "Lỗi hệ thống khi lấy lịch sử thanh toán"
         });
     }
+};
+
+exports.getAllPayments = async (req, res) => {
+    try {
+        const payments = await PaymentModel.find().sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            success: true,
+            code: 200,
+            data: payments
+        });
+    } catch (error) {
+        console.error("Lỗi khi lấy tất cả danh sách thanh toán:", error);
+        return res.status(500).json({
+            success: false,
+            code: 500,
+            error: error.message,
+            message: "Lỗi hệ thống khi lấy danh sách thanh toán"
+        });
+    }
+};
+
+exports.getRevenueStatistics = async (req, res) => {
+    try {
+        const matchStage = { $match: { status: "SUCCESS" } };
+
+        const dailyStats = await PaymentModel.aggregate([
+            matchStage,
+            {
+                $group: {
+                    _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" }, day: { $dayOfMonth: "$createdAt" } },
+                    totalRevenue: { $sum: "$order_amount" },
+                    transactionCount: { $sum: 1 }
+                }
+            },
+            { $sort: { "_id.year": -1, "_id.month": -1, "_id.day": -1 } }
+        ]);
+
+        const monthlyStats = await PaymentModel.aggregate([
+            matchStage,
+            {
+                $group: {
+                    _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } },
+                    totalRevenue: { $sum: "$order_amount" },
+                    transactionCount: { $sum: 1 }
+                }
+            },
+            { $sort: { "_id.year": -1, "_id.month": -1 } }
+        ]);
+
+        const yearlyStats = await PaymentModel.aggregate([
+            matchStage,
+            {
+                $group: {
+                    _id: { year: { $year: "$createdAt" } },
+                    totalRevenue: { $sum: "$order_amount" },
+                    transactionCount: { $sum: 1 }
+                }
+            },
+            { $sort: { "_id.year": -1 } }
+        ]);
+
+        return res.status(200).json({
+            success: true,
+            code: 200,
+            data: {
+                daily: dailyStats,
+                monthly: monthlyStats,
+                yearly: yearlyStats
+            }
+        });
+    } catch (error) {
+        console.error("Lỗi khi thống kê doanh thu:", error);
+        return res.status(500).json({
+            success: false,
+            code: 500,
+            error: error.message,
+            message: "Lỗi hệ thống khi thống kê doanh thu"
+        });
+    }
 };

@@ -4,9 +4,9 @@ const packageController = require("../controllers/package.controller");
 const { authenticate, authorizeRoles } = require("../middleware/auth.middleware");
 
 
-router.get("/", authenticate, packageController.getAllPackages);
+router.get("/", packageController.getAllPackages);
 
-router.get("/:id", authenticate, packageController.getPackageById);
+router.get("/:id", packageController.getPackageById);
 
 router.post("/", authenticate, authorizeRoles("UTM_ADMIN"), packageController.createPackage);
 
