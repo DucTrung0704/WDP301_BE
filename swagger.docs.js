@@ -3107,3 +3107,61 @@
  *       200:
  *         description: Xóa thành công
  */
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Payments
+ *     description: Quản lý thanh toán
+ */
+
+/**
+ * @swagger
+ * /api/sepay/payment-history:
+ *   get:
+ *     summary: Lấy danh sách lịch sử thanh toán của người dùng hiện tại
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: integer
+ *                   example: 200
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       order_id:
+ *                         type: string
+ *                         example: "DH1711100000"
+ *                       order_description:
+ *                         type: string
+ *                         example: "Nạp tiền gói Fleet Operator - DH1711100000"
+ *                       order_amount:
+ *                         type: number
+ *                         example: 500000
+ *                       package_id:
+ *                         type: string
+ *                         example: "60f71f..."
+ *                       status:
+ *                         type: string
+ *                         example: "SUCCESS"
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *       401:
+ *         description: Không được xác thực
+ *       500:
+ *         description: Lỗi server
+ */

@@ -158,3 +158,24 @@ exports.webhook = async (req, res) => {
         });
     }
 }
+
+exports.getPaymentHistory = async (req, res) => {
+    try {
+        const customer_id = req.user.id;
+        const payments = await PaymentModel.find({ customer_id: customer_id }).sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            success: true,
+            code: 200,
+            data: payments
+        });
+    } catch (error) {
+        console.error("Lỗi khi lấy lịch sử thanh toán:", error);
+        return res.status(500).json({
+            success: false,
+            code: 500,
+            error: error.message,
+            message: "Lỗi hệ thống khi lấy lịch sử thanh toán"
+        });
+    }
+};
