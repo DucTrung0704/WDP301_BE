@@ -2862,3 +2862,577 @@
  *       404:
  *         description: Alert not found
  */
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Sepay
+ *     description: Tích hợp thanh toán Sepay
+ */
+
+/**
+ * @swagger
+ * /api/sepay/payment:
+ *   post:
+ *     summary: Khởi tạo URL thanh toán Sepay
+ *     tags: [Sepay]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [order_description, order_amount, success_url, cancel_url, error_url]
+ *             properties:
+ *               order_description:
+ *                 type: string
+ *                 example: "Thanh toán đơn hàng DH... "
+ *               order_amount:
+ *                 type: number
+ *                 example: 100000
+ *               customer_id:
+ *                 type: string
+ *                 example: "user_123"
+ *               success_url:
+ *                 type: string
+ *                 example: "https://yourdomain.com/success"
+ *               cancel_url:
+ *                 type: string
+ *                 example: "https://yourdomain.com/cancel"
+ *               error_url:
+ *                 type: string
+ *                 example: "https://yourdomain.com/error"
+ *     responses:
+ *       200:
+ *         description: Khởi tạo thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: integer
+ *                   example: 200
+ *                 paymentCheckoutUrl:
+ *                   type: string
+ *                   example: "https://sepay.vn/checkout/..."
+ *                 paymentFormFiels:
+ *                   type: object
+ *                 machant_id:
+ *                   type: string
+ *                 machant_key:
+ *                   type: string
+ *       400:
+ *         description: Không thể tạo mã qr thanh toán
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 code:
+ *                   type: integer
+ *                   example: 400
+ *                 error:
+ *                   type: object
+ *                 message:
+ *                   type: string
+ *                   example: "Không thể tạo mã qr thanh toán"
+ */
+
+/**
+ * @swagger
+ * /api/sepay/webhook:
+ *   post:
+ *     summary: Khởi tạo URL thanh toán Sepay
+ *     tags: [Sepay]
+ *     responses:
+ *       200:
+ *         description: Khởi tạo thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: integer
+ *                   example: 200
+ *                 paymentCheckoutUrl:
+ *                   type: string
+ *                   example: "https://sepay.vn/checkout/..."
+ *                 paymentFormFiels:
+ *                   type: object
+ *                 machant_id:
+ *                   type: string
+ *                 machant_key:
+ *                   type: string
+ *       400:
+ *         description: Không thể tạo mã qr thanh toán
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 code:
+ *                   type: integer
+ *                   example: 400
+ *                 error:
+ *                   type: object
+ *                 message:
+ *                   type: string
+ *                   example: "Không thể tạo mã qr thanh toán"
+ */
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Packages
+ *     description: Quản lý các gói thành viên
+ * 
+ * components:
+ *   schemas:
+ *     Package:
+ *       type: object
+ *       properties:
+ *         _id:
+ *           type: string
+ *         name:
+ *           type: string
+ *           example: "Gói Fleet Operator"
+ *         description:
+ *           type: string
+ *           example: "Gói dành cho đối tác vận hành nhiều thiết bị"
+ *         price:
+ *           type: number
+ *           example: 500000
+ *         status:
+ *           type: string
+ *           enum: [ACTIVE, INACTIVE]
+ *           example: "ACTIVE"
+ * 
+ * /api/packages:
+ *   get:
+ *     summary: Lấy danh sách toàn bộ gói thành viên
+ *     tags: [Packages]
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [ACTIVE, INACTIVE]
+ *         description: Lọc theo trạng thái
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Package'
+ * 
+ *   post:
+ *     summary: Tạo gói thành viên mới (Chỉ Admin)
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Package'
+ *     responses:
+ *       201:
+ *         description: Tạo mới gói thành công
+ * 
+ * /api/packages/{id}:
+ *   get:
+ *     summary: Xem chi tiết một gói thành viên
+ *     tags: [Packages]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lấy dữ liệu thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Package'
+ * 
+ *   put:
+ *     summary: Cập nhật thông tin gói thành viên (Chỉ Admin)
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Package'
+ *     responses:
+ *       200:
+ *         description: Cập nhật thành công
+ * 
+ *   delete:
+ *     summary: Xóa gói thành viên (Chỉ Admin)
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Xóa thành công
+ */
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Payments
+ *     description: Quản lý thanh toán
+ */
+
+/**
+ * @swagger
+ * /api/sepay/payment-history:
+ *   get:
+ *     summary: Lấy danh sách lịch sử thanh toán của người dùng hiện tại
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: integer
+ *                   example: 200
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       order_id:
+ *                         type: string
+ *                         example: "DH1711100000"
+ *                       order_description:
+ *                         type: string
+ *                         example: "Nạp tiền gói Fleet Operator - DH1711100000"
+ *                       order_amount:
+ *                         type: number
+ *                         example: 500000
+ *                       package_id:
+ *                         type: string
+ *                         example: "60f71f..."
+ *                       status:
+ *                         type: string
+ *                         example: "SUCCESS"
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *       401:
+ *         description: Không được xác thực
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/sepay/admin/payments:
+ *   get:
+ *     summary: Lấy danh sách tất cả lịch sử thanh toán (Chỉ Admin)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: integer
+ *                   example: 200
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       401:
+ *         description: Không được xác thực
+ *       403:
+ *         description: Không có quyền truy cập
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/sepay/admin/revenue:
+ *   get:
+ *     summary: Thống kê doanh thu theo ngày, tháng, năm (Chỉ Admin)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lấy thống kê doanh thu thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: integer
+ *                   example: 200
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     daily:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                     monthly:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                     yearly:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *       401:
+ *         description: Không được xác thực
+ *       403:
+ *         description: Không có quyền truy cập
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Favourites
+ *     description: Quản lý địa điểm yêu thích
+ */
+
+/**
+ * @swagger
+ * /api/favourite:
+ *   get:
+ *     summary: Lấy danh sách địa điểm yêu thích của user
+ *     tags: [Favourites]
+ *     parameters:
+ *       - in: query
+ *         name: user_id
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID của người dùng
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   _id:
+ *                     type: string
+ *                   user_id:
+ *                     type: string
+ *                   name:
+ *                     type: string
+ *                   address:
+ *                     type: string
+ *                   numberOfFlight:
+ *                     type: number
+ *                   location:
+ *                     type: object
+ *                     properties:
+ *                       coordinates:
+ *                         type: array
+ *                         items:
+ *                           type: number
+ *                         example: [106.6297, 10.8231]
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/favourite/add:
+ *   post:
+ *     summary: Thêm địa điểm yêu thích mới
+ *     tags: [Favourites]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - user_id
+ *               - location
+ *             properties:
+ *               user_id:
+ *                 type: string
+ *                 example: "60d5ecb8b392d7..."
+ *               name:
+ *                 type: string
+ *                 example: "Công viên Tao Đàn"
+ *               address:
+ *                 type: string
+ *                 example: "Quận 1, TP.HCM"
+ *               numberOfFlight:
+ *                 type: number
+ *                 example: 5
+ *               location:
+ *                 type: object
+ *                 required:
+ *                   - type
+ *                   - coordinates
+ *                 properties:
+ *                   coordinates:
+ *                     type: array
+ *                     items:
+ *                       type: number
+ *                     example: [106.6297, 10.8231]
+ *     responses:
+ *       201:
+ *         description: Thêm thành công
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/favourite/{id}:
+ *   get:
+ *     summary: Lấy địa điểm yêu thích theo ID
+ *     tags: [Favourites]
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: ID của địa điểm yêu thích
+ *         schema:
+ *           type: string
+ *           example: "507f1f77bcf86cd799439011"
+ *     responses:
+ *       200:
+ *         description: Lấy thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 _id:
+ *                   type: string
+ *                   example: "507f1f77bcf86cd799439011"
+ *                 user_id:
+ *                   type: string
+ *                   example: "60d5ecb8b392d7..."
+ *                 name:
+ *                   type: string
+ *                   example: "Công viên Tao Đàn"
+ *                 address:
+ *                   type: string
+ *                   example: "Quận 1, TP.HCM"
+ *                 numberOfFlight:
+ *                   type: number
+ *                   example: 5
+ *                 location:
+ *                   type: object
+ *                   properties:
+ *                     coordinates:
+ *                       type: array
+ *                       items:
+ *                         type: number
+ *                       example: [106.6297, 10.8231]
+ *       404:
+ *         description: Không tìm thấy địa điểm yêu thích
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Không tìm thấy địa điểm yêu thích"
+ *       500:
+ *         description: Lỗi server
+ *
+ *   delete:
+ *     summary: Xóa địa điểm yêu thích theo ID
+ *     tags: [Favourites]
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: ID của địa điểm yêu thích cần xóa
+ *         schema:
+ *           type: string
+ *           example: "507f1f77bcf86cd799439011"
+ *     responses:
+ *       200:
+ *         description: Xóa thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Xóa địa điểm yêu thích thành công"
+ *       404:
+ *         description: Không tìm thấy địa điểm yêu thích
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Không tìm thấy địa điểm yêu thích"
+ *       500:
+ *         description: Lỗi server
+ */
