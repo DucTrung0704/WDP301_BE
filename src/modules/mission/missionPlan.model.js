@@ -44,7 +44,7 @@ const MissionPlanSchema = new mongoose.Schema(
     { timestamps: true },
 );
 
-MissionPlanSchema.index({ mission: 1, flightPlan: 1 }, { unique: true });
+MissionPlanSchema.index({ mission: 1, flightPlan: 1 });
 
 MissionPlanSchema.path("plannedEnd").validate(function (value) {
     return value > this.plannedStart;

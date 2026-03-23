@@ -7,6 +7,7 @@ exports.createDrone = async (req, res) => {
             model,
             ownerType,
             maxAltitude,
+            route,
         } = req.body;
 
         // Validate required fields
@@ -26,6 +27,7 @@ exports.createDrone = async (req, res) => {
             owner: req.user.id,
             ownerType: ownerType || "INDIVIDUAL",
             maxAltitude,
+            route,
         });
 
         // Populate owner data before sending response

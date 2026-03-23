@@ -7,7 +7,8 @@
     "dev": "nodemon ./bin/www",
     "worker": "node ./src/workers/telemetryRedisWorker.js",
     "worker:dev": "nodemon ./src/workers/telemetryRedisWorker.js",
-    "test:telemetry": "node ./scripts/test-telemetry.js"
+    "test:telemetry": "node ./scripts/test-telemetry.js",
+    "test": "jest"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -18,14 +19,18 @@
     "express": "^4.22.1",
     "google-auth-library": "^10.5.0",
     "http-errors": "~1.6.3",
+    "i": "^0.3.7",
     "jsonwebtoken": "^9.0.3",
     "kdbush": "^3.0.0",
     "mongoose": "^9.1.2",
     "morgan": "^1.10.1",
     "nodemon": "^3.1.11",
+    "npm": "^11.12.0",
     "pug": "^3.0.3",
     "redis": "^4.7.1",
+    "sepay-pg-node": "^1.0.0",
     "socket.io": "^4.8.3",
+    "start": "^5.1.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "ws": "^8.19.0"

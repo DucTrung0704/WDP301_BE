@@ -3,15 +3,29 @@ const jwt = require("jsonwebtoken");
 const { cacheOps, streamOps, REDIS_KEYS } = require("./redis");
 const { setWsBroadcast } = require("../modules/alert/alert.service");
 const { runInflightChecks } = require("../modules/conflict/inflightDetection.service");
+const { processTelemetry } = require("../modules/telemetry/telemetry.service");
 const FlightSession = require("../modules/flightSession/flightSession.model");
 const FlightPlan = require("../modules/flightPlan/flightPlan.model");
 const { getNearbyDrones } = require("../modules/nearby/nearby.service");
 
-const NEARBY_RADIUS_M = parseInt(process.env.NEARBY_RADIUS_M)        || 1000;
-const NEARBY_PUSH_MS  = parseInt(process.env.NEARBY_PUSH_INTERVAL_MS) || 1000;
+const NEARBY_RADIUS_M = parseInt(process.env.NEARBY_RADIUS_M) || 1000;
+const NEARBY_PUSH_MS = parseInt(process.env.NEARBY_PUSH_INTERVAL_MS) || 1000;
 
 let io; // Hold the socket.io server instance
 let redisReady = false; // Redis connectivity flag
+const TELEMETRY_DIAG_LOG = process.env.TELEMETRY_DIAG_LOG !== "false";
+
+function diagTelemetry(branch, info = {}) {
+  if (!TELEMETRY_DIAG_LOG) return;
+
+  const payload = {
+    branch,
+    ...info,
+    ts: new Date().toISOString(),
+  };
+
+  console.log(`[TELEMETRY_DIAG] ${JSON.stringify(payload)}`);
+}
 
 /**
  * Trigger in-flight conflict detection asynchronously
@@ -94,9 +108,17 @@ function init(httpServer) {
     socket.on("telemetry", async (msg) => {
       try {
         const { droneId, sessionId, lat, lng, alt, speed, heading, batteryLevel, timestamp } = msg;
+        const telemetryTs = timestamp || Date.now();
 
         // ========== VALIDATION ==========
         if (!droneId || lat === undefined || lng === undefined) {
+          diagTelemetry("SKIP", {
+            reason: "missing_required_fields",
+            socketId: socket.id,
+            userId: socket.user.id,
+            droneId: droneId || null,
+            sessionId: sessionId || null,
+          });
           socket.emit("error", { message: "Missing required fields: droneId, lat, lng" });
           return;
         }
@@ -113,6 +135,15 @@ function init(httpServer) {
 
         // ========== SEND TO REDIS STREAM (NON-BLOCKING) ==========
         if (redisReady) {
+          diagTelemetry("REDIS_STREAM", {
+            reason: "redis_ready",
+            socketId: socket.id,
+            userId: socket.user.id,
+            droneId,
+            sessionId: sessionId || null,
+            telemetryTimestamp: telemetryTs,
+          });
+
           streamOps
             .addTelemetry({
               droneId,
@@ -123,16 +154,61 @@ function init(httpServer) {
               speed: speed || 0,
               heading: heading || 0,
               batteryLevel: batteryLevel || 0,
-              timestamp: timestamp || Date.now(),
+              timestamp: telemetryTs,
               sourceGateway: socket.id,
               sourceUser: socket.user.id,
             })
             .catch((err) => {
               console.error(`❌ Failed to add telemetry to Redis stream for drone ${droneId}:`, err.message);
-              // Optional: implement retry queue or fallback storage
+              // Fallback: save directly to DB when Redis stream write fails
+              if (sessionId) {
+                diagTelemetry("FALLBACK_DB", {
+                  reason: "redis_stream_add_failed",
+                  socketId: socket.id,
+                  userId: socket.user.id,
+                  droneId,
+                  sessionId,
+                  error: err.message,
+                });
+
+                processTelemetry(sessionId, { lat, lng, altitude: alt || 0, speed: speed || 0, heading: heading || 0, batteryLevel }, true)
+                  .catch((e) => console.error(`❌ Fallback DB save failed for session ${sessionId}:`, e.message));
+              } else {
+                diagTelemetry("SKIP", {
+                  reason: "redis_stream_add_failed_and_no_sessionId_for_fallback",
+                  socketId: socket.id,
+                  userId: socket.user.id,
+                  droneId,
+                  sessionId: null,
+                  error: err.message,
+                });
+              }
             });
         } else {
-          console.warn("⚠️ Redis streams not ready, message may be buffered");
+          // Redis not ready — save directly to DB so data is never lost
+          console.warn("⚠️ Redis not ready, saving telemetry directly to DB");
+          if (sessionId) {
+            diagTelemetry("FALLBACK_DB", {
+              reason: "redis_not_ready",
+              socketId: socket.id,
+              userId: socket.user.id,
+              droneId,
+              sessionId,
+              telemetryTimestamp: telemetryTs,
+            });
+
+            processTelemetry(sessionId, { lat, lng, altitude: alt || 0, speed: speed || 0, heading: heading || 0, batteryLevel }, true)
+              .catch((err) => console.error(`❌ Direct DB telemetry save failed for session ${sessionId}:`, err.message));
+          } else {
+            diagTelemetry("SKIP", {
+              reason: "redis_not_ready_and_no_sessionId_for_fallback",
+              socketId: socket.id,
+              userId: socket.user.id,
+              droneId,
+              sessionId: null,
+              telemetryTimestamp: telemetryTs,
+            });
+          }
         }
 
         // ========== SEND ACK IMMEDIATELY (< 5ms) ==========
@@ -179,163 +255,163 @@ function init(httpServer) {
     socket.on("disconnect", () => {
       console.log(`Socket client disconnected [${socket.id}]`);
 
-        // ── Nearby Drones (during flight) ────────────────────────────────────────
-        // Client sends: { sessionId, lat?, lng? }
-        // Server pushes: nearby_drones every NEARBY_PUSH_MS
-        socket.on("subscribe_nearby", async (msg) => {
-          try {
-            const { sessionId, lat, lng } = msg || {};
+      // ── Nearby Drones (during flight) ────────────────────────────────────────
+      // Client sends: { sessionId, lat?, lng? }
+      // Server pushes: nearby_drones every NEARBY_PUSH_MS
+      socket.on("subscribe_nearby", async (msg) => {
+        try {
+          const { sessionId, lat, lng } = msg || {};
 
-            if (!sessionId) {
-              socket.emit("error", { message: "subscribe_nearby: sessionId is required" });
-              return;
-            }
-
-            const session = await FlightSession.findById(sessionId).populate("drone");
-            if (!session) {
-              socket.emit("error", { message: "Flight session not found" });
-              return;
-            }
-
-            if (session.pilot.toString() !== socket.user.id.toString()) {
-              socket.emit("error", { message: "Forbidden: not your session" });
-              return;
-            }
-
-            // Resolve centre coordinates
-            let centreLat = lat;
-            let centreLng = lng;
-
-            if (centreLat == null || centreLng == null) {
-              // Fall back to latest cached drone position
-              const droneIdStr =
-                session.drone._id?.toString() || session.drone.toString();
-              const cached = await cacheOps.getDroneLocation(droneIdStr);
-              if (!cached) {
-                socket.emit("error", {
-                  message:
-                    "subscribe_nearby: lat/lng required — no telemetry cached yet",
-                });
-                return;
-              }
-              centreLat = cached.lat;
-              centreLng = cached.lng;
-            }
-
-            const droneId =
-              session.drone._id?.toString() || session.drone.toString();
-
-            // Stop any existing nearby interval first
-            clearInterval(socket.nearbyInterval);
-
-            const pushNearby = async () => {
-              try {
-                // Use latest cached position when available (drone is moving)
-                const latest = await cacheOps.getDroneLocation(droneId);
-                const queryLat = latest ? latest.lat : centreLat;
-                const queryLng = latest ? latest.lng : centreLng;
-
-                const drones = await getNearbyDrones(
-                  queryLat,
-                  queryLng,
-                  NEARBY_RADIUS_M,
-                  [droneId],
-                );
-
-                socket.emit("nearby_drones", {
-                  drones,
-                  count: drones.length,
-                  timestamp: Date.now(),
-                });
-              } catch (err) {
-                console.error("nearby push error:", err.message);
-              }
-            };
-
-            // Push immediately, then on interval
-            await pushNearby();
-            socket.nearbyInterval = setInterval(pushNearby, NEARBY_PUSH_MS);
-
-            socket.emit("nearby_subscribed", { sessionId, radiusM: NEARBY_RADIUS_M });
-          } catch (err) {
-            console.error("subscribe_nearby error:", err.message);
-            socket.emit("error", { message: err.message });
+          if (!sessionId) {
+            socket.emit("error", { message: "subscribe_nearby: sessionId is required" });
+            return;
           }
-        });
 
-        // ── Nearby Drones (pre-flight, FLEET_OPERATOR only) ──────────────────────
-        // Client sends: { flightPlanId, lat, lng }
-        // Server pushes: nearby_drones every NEARBY_PUSH_MS from the given position
-        socket.on("subscribe_plan_nearby", async (msg) => {
-          try {
-            if (socket.user.role !== "FLEET_OPERATOR") {
-              socket.emit("error", {
-                message: "subscribe_plan_nearby: FLEET_OPERATOR only",
-              });
-              return;
-            }
+          const session = await FlightSession.findById(sessionId).populate("drone");
+          if (!session) {
+            socket.emit("error", { message: "Flight session not found" });
+            return;
+          }
 
-            const { flightPlanId, lat, lng } = msg || {};
+          if (session.pilot.toString() !== socket.user.id.toString()) {
+            socket.emit("error", { message: "Forbidden: not your session" });
+            return;
+          }
 
-            if (!flightPlanId || lat == null || lng == null) {
+          // Resolve centre coordinates
+          let centreLat = lat;
+          let centreLng = lng;
+
+          if (centreLat == null || centreLng == null) {
+            // Fall back to latest cached drone position
+            const droneIdStr =
+              session.drone._id?.toString() || session.drone.toString();
+            const cached = await cacheOps.getDroneLocation(droneIdStr);
+            if (!cached) {
               socket.emit("error", {
                 message:
-                  "subscribe_plan_nearby: flightPlanId, lat, lng are required",
+                  "subscribe_nearby: lat/lng required — no telemetry cached yet",
               });
               return;
             }
-
-            const plan = await FlightPlan.findById(flightPlanId);
-            if (!plan) {
-              socket.emit("error", { message: "Flight plan not found" });
-              return;
-            }
-
-            if (plan.pilot.toString() !== socket.user.id.toString()) {
-              socket.emit("error", { message: "Forbidden: not your flight plan" });
-              return;
-            }
-
-            // Stop any existing nearby interval first
-            clearInterval(socket.nearbyInterval);
-
-            const pushNearby = async () => {
-              try {
-                const drones = await getNearbyDrones(lat, lng, NEARBY_RADIUS_M);
-                socket.emit("nearby_drones", {
-                  drones,
-                  count: drones.length,
-                  timestamp: Date.now(),
-                });
-              } catch (err) {
-                console.error("plan nearby push error:", err.message);
-              }
-            };
-
-            await pushNearby();
-            socket.nearbyInterval = setInterval(pushNearby, NEARBY_PUSH_MS);
-
-            socket.emit("nearby_subscribed", {
-              flightPlanId,
-              radiusM: NEARBY_RADIUS_M,
-            });
-          } catch (err) {
-            console.error("subscribe_plan_nearby error:", err.message);
-            socket.emit("error", { message: err.message });
+            centreLat = cached.lat;
+            centreLng = cached.lng;
           }
-        });
 
-        // ── Unsubscribe Nearby ────────────────────────────────────────────────────
-        socket.on("unsubscribe_nearby", () => {
-          clearInterval(socket.nearbyInterval);
-          socket.nearbyInterval = null;
-          socket.emit("nearby_unsubscribed", {});
-        });
+          const droneId =
+            session.drone._id?.toString() || session.drone.toString();
 
-        socket.on("disconnect", () => {
+          // Stop any existing nearby interval first
           clearInterval(socket.nearbyInterval);
-          console.log(`Socket client disconnected [${socket.id}]`);
-        });
+
+          const pushNearby = async () => {
+            try {
+              // Use latest cached position when available (drone is moving)
+              const latest = await cacheOps.getDroneLocation(droneId);
+              const queryLat = latest ? latest.lat : centreLat;
+              const queryLng = latest ? latest.lng : centreLng;
+
+              const drones = await getNearbyDrones(
+                queryLat,
+                queryLng,
+                NEARBY_RADIUS_M,
+                [droneId],
+              );
+
+              socket.emit("nearby_drones", {
+                drones,
+                count: drones.length,
+                timestamp: Date.now(),
+              });
+            } catch (err) {
+              console.error("nearby push error:", err.message);
+            }
+          };
+
+          // Push immediately, then on interval
+          await pushNearby();
+          socket.nearbyInterval = setInterval(pushNearby, NEARBY_PUSH_MS);
+
+          socket.emit("nearby_subscribed", { sessionId, radiusM: NEARBY_RADIUS_M });
+        } catch (err) {
+          console.error("subscribe_nearby error:", err.message);
+          socket.emit("error", { message: err.message });
+        }
+      });
+
+      // ── Nearby Drones (pre-flight, FLEET_OPERATOR only) ──────────────────────
+      // Client sends: { flightPlanId, lat, lng }
+      // Server pushes: nearby_drones every NEARBY_PUSH_MS from the given position
+      socket.on("subscribe_plan_nearby", async (msg) => {
+        try {
+          if (socket.user.role !== "FLEET_OPERATOR") {
+            socket.emit("error", {
+              message: "subscribe_plan_nearby: FLEET_OPERATOR only",
+            });
+            return;
+          }
+
+          const { flightPlanId, lat, lng } = msg || {};
+
+          if (!flightPlanId || lat == null || lng == null) {
+            socket.emit("error", {
+              message:
+                "subscribe_plan_nearby: flightPlanId, lat, lng are required",
+            });
+            return;
+          }
+
+          const plan = await FlightPlan.findById(flightPlanId);
+          if (!plan) {
+            socket.emit("error", { message: "Flight plan not found" });
+            return;
+          }
+
+          if (plan.pilot.toString() !== socket.user.id.toString()) {
+            socket.emit("error", { message: "Forbidden: not your flight plan" });
+            return;
+          }
+
+          // Stop any existing nearby interval first
+          clearInterval(socket.nearbyInterval);
+
+          const pushNearby = async () => {
+            try {
+              const drones = await getNearbyDrones(lat, lng, NEARBY_RADIUS_M);
+              socket.emit("nearby_drones", {
+                drones,
+                count: drones.length,
+                timestamp: Date.now(),
+              });
+            } catch (err) {
+              console.error("plan nearby push error:", err.message);
+            }
+          };
+
+          await pushNearby();
+          socket.nearbyInterval = setInterval(pushNearby, NEARBY_PUSH_MS);
+
+          socket.emit("nearby_subscribed", {
+            flightPlanId,
+            radiusM: NEARBY_RADIUS_M,
+          });
+        } catch (err) {
+          console.error("subscribe_plan_nearby error:", err.message);
+          socket.emit("error", { message: err.message });
+        }
+      });
+
+      // ── Unsubscribe Nearby ────────────────────────────────────────────────────
+      socket.on("unsubscribe_nearby", () => {
+        clearInterval(socket.nearbyInterval);
+        socket.nearbyInterval = null;
+        socket.emit("nearby_unsubscribed", {});
+      });
+
+      socket.on("disconnect", () => {
+        clearInterval(socket.nearbyInterval);
+        console.log(`Socket client disconnected [${socket.id}]`);
+      });
     });
 
     socket.on("error", (err) => {
