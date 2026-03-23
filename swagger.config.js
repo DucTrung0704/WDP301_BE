@@ -20,9 +20,9 @@ const options = {
         description: "Development server",
       },
       {
-        url: "https://wdp-301-be-mauve.vercel.app",
-        description: "Development server",
-      },
+        url: "https://wdp-a0c3gxa5f6c9gjg6.japaneast-01.azurewebsites.net",
+        description: "Azure server"
+      }
     ],
     components: {
       securitySchemes: {
