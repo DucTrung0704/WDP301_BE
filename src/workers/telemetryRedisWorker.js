@@ -10,6 +10,8 @@ require("dotenv").config();
 const mongoose = require("mongoose");
 const { redisClientAsync, streamOps, REDIS_KEYS } = require("../config/redis");
 const Telemetry = require("../modules/telemetry/telemetry.model");
+const FlightSession = require("../modules/flightSession/flightSession.model");
+const Drone = require("../../models/drone.model");
 
 // ========== SAMPLING CONFIGURATION ==========
 const SAMPLING_CONFIG = {
@@ -176,6 +178,52 @@ const CONSUMER_ID = `telemetry-worker-${process.pid}`;
 let mongoConnected = false;
 let consumerRunning = false;
 
+// Cache mappings to reduce DB lookups in hot path
+const sessionDroneCache = new Map();
+const droneBusinessToObjectIdCache = new Map();
+
+async function resolveDroneObjectId(droneIdRaw, sessionIdRaw) {
+    const droneId = droneIdRaw ? String(droneIdRaw) : "";
+    const sessionId = sessionIdRaw ? String(sessionIdRaw) : "";
+
+    // 1) Resolve from session (most reliable)
+    if (sessionId && sessionId !== "null" && sessionId !== "undefined") {
+        if (sessionDroneCache.has(sessionId)) {
+            return sessionDroneCache.get(sessionId);
+        }
+
+        if (mongoose.Types.ObjectId.isValid(sessionId)) {
+            const session = await FlightSession.findById(sessionId).select("drone").lean();
+            if (session?.drone) {
+                const resolved = session.drone.toString();
+                sessionDroneCache.set(sessionId, resolved);
+                return resolved;
+            }
+        }
+    }
+
+    // 2) If input is already an ObjectId
+    if (mongoose.Types.ObjectId.isValid(droneId)) {
+        return droneId;
+    }
+
+    // 3) Resolve from business droneId (e.g., DRONE-001)
+    if (!droneId) return null;
+
+    if (droneBusinessToObjectIdCache.has(droneId)) {
+        return droneBusinessToObjectIdCache.get(droneId);
+    }
+
+    const droneDoc = await Drone.findOne({ droneId }).select("_id").lean();
+    if (!droneDoc?._id) {
+        return null;
+    }
+
+    const resolved = droneDoc._id.toString();
+    droneBusinessToObjectIdCache.set(droneId, resolved);
+    return resolved;
+}
+
 const connectAndConsume = async () => {
     try {
         // ========== CONNECT MONGODB ==========
@@ -216,10 +264,28 @@ const connectAndConsume = async () => {
                                     const { id, message: msgData } = message;
                                     const data = msgData;
 
+                                    const resolvedDroneId = await resolveDroneObjectId(
+                                        data.droneId,
+                                        data.sessionId,
+                                    );
+
+                                    if (!resolvedDroneId) {
+                                        console.warn(
+                                            `⚠️ Skip telemetry message ${id}: cannot resolve droneId '${data.droneId}' (sessionId='${data.sessionId || ""}')`
+                                        );
+                                        await streamOps.ackMessage(id);
+                                        continue;
+                                    }
+
+                                    const resolvedSessionId =
+                                        data.sessionId && mongoose.Types.ObjectId.isValid(String(data.sessionId))
+                                            ? String(data.sessionId)
+                                            : null;
+
                                     // Transform to telemetry document
                                     const telemetryDoc = {
-                                        drone: data.droneId,
-                                        flightSession: data.sessionId || null,
+                                        drone: resolvedDroneId,
+                                        flightSession: resolvedSessionId,
                                         timestamp: new Date(parseInt(data.timestamp) || Date.now()),
                                         location: {
                                             type: "Point",

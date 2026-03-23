@@ -13,6 +13,19 @@ const NEARBY_PUSH_MS = parseInt(process.env.NEARBY_PUSH_INTERVAL_MS) || 1000;
 
 let io; // Hold the socket.io server instance
 let redisReady = false; // Redis connectivity flag
+const TELEMETRY_DIAG_LOG = process.env.TELEMETRY_DIAG_LOG !== "false";
+
+function diagTelemetry(branch, info = {}) {
+  if (!TELEMETRY_DIAG_LOG) return;
+
+  const payload = {
+    branch,
+    ...info,
+    ts: new Date().toISOString(),
+  };
+
+  console.log(`[TELEMETRY_DIAG] ${JSON.stringify(payload)}`);
+}
 
 /**
  * Trigger in-flight conflict detection asynchronously
@@ -95,9 +108,17 @@ function init(httpServer) {
     socket.on("telemetry", async (msg) => {
       try {
         const { droneId, sessionId, lat, lng, alt, speed, heading, batteryLevel, timestamp } = msg;
+        const telemetryTs = timestamp || Date.now();
 
         // ========== VALIDATION ==========
         if (!droneId || lat === undefined || lng === undefined) {
+          diagTelemetry("SKIP", {
+            reason: "missing_required_fields",
+            socketId: socket.id,
+            userId: socket.user.id,
+            droneId: droneId || null,
+            sessionId: sessionId || null,
+          });
           socket.emit("error", { message: "Missing required fields: droneId, lat, lng" });
           return;
         }
@@ -114,6 +135,15 @@ function init(httpServer) {
 
         // ========== SEND TO REDIS STREAM (NON-BLOCKING) ==========
         if (redisReady) {
+          diagTelemetry("REDIS_STREAM", {
+            reason: "redis_ready",
+            socketId: socket.id,
+            userId: socket.user.id,
+            droneId,
+            sessionId: sessionId || null,
+            telemetryTimestamp: telemetryTs,
+          });
+
           streamOps
             .addTelemetry({
               droneId,
@@ -124,7 +154,7 @@ function init(httpServer) {
               speed: speed || 0,
               heading: heading || 0,
               batteryLevel: batteryLevel || 0,
-              timestamp: timestamp || Date.now(),
+              timestamp: telemetryTs,
               sourceGateway: socket.id,
               sourceUser: socket.user.id,
             })
@@ -132,16 +162,52 @@ function init(httpServer) {
               console.error(`❌ Failed to add telemetry to Redis stream for drone ${droneId}:`, err.message);
               // Fallback: save directly to DB when Redis stream write fails
               if (sessionId) {
+                diagTelemetry("FALLBACK_DB", {
+                  reason: "redis_stream_add_failed",
+                  socketId: socket.id,
+                  userId: socket.user.id,
+                  droneId,
+                  sessionId,
+                  error: err.message,
+                });
+
                 processTelemetry(sessionId, { lat, lng, altitude: alt || 0, speed: speed || 0, heading: heading || 0, batteryLevel }, true)
                   .catch((e) => console.error(`❌ Fallback DB save failed for session ${sessionId}:`, e.message));
+              } else {
+                diagTelemetry("SKIP", {
+                  reason: "redis_stream_add_failed_and_no_sessionId_for_fallback",
+                  socketId: socket.id,
+                  userId: socket.user.id,
+                  droneId,
+                  sessionId: null,
+                  error: err.message,
+                });
               }
             });
         } else {
           // Redis not ready — save directly to DB so data is never lost
           console.warn("⚠️ Redis not ready, saving telemetry directly to DB");
           if (sessionId) {
+            diagTelemetry("FALLBACK_DB", {
+              reason: "redis_not_ready",
+              socketId: socket.id,
+              userId: socket.user.id,
+              droneId,
+              sessionId,
+              telemetryTimestamp: telemetryTs,
+            });
+
             processTelemetry(sessionId, { lat, lng, altitude: alt || 0, speed: speed || 0, heading: heading || 0, batteryLevel }, true)
               .catch((err) => console.error(`❌ Direct DB telemetry save failed for session ${sessionId}:`, err.message));
+          } else {
+            diagTelemetry("SKIP", {
+              reason: "redis_not_ready_and_no_sessionId_for_fallback",
+              socketId: socket.id,
+              userId: socket.user.id,
+              droneId,
+              sessionId: null,
+              telemetryTimestamp: telemetryTs,
+            });
           }
         }
 

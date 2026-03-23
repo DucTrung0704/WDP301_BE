@@ -344,10 +344,11 @@ const streamOps = {
             const groupName = REDIS_KEYS.telemetryGroup;
 
             const messages = await redisClientAsync.xReadGroup(
+                groupName,
+                consumerId,
                 {
                     key: streamKey,
-                    group: groupName,
-                    consumer: consumerId,
+                    id: ">",
                 },
                 {
                     count: count,

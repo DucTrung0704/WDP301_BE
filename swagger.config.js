@@ -174,6 +174,24 @@ const options = {
               enum: ["IDLE", "FLYING", "MAINTENANCE", "DISABLED"],
               example: "IDLE",
             },
+            route: {
+              type: "object",
+              properties: {
+                type: { type: "string", enum: ["LineString"], example: "LineString" },
+                coordinates: {
+                  type: "array",
+                  items: {
+                    type: "array",
+                    items: { type: "number" },
+                  },
+                  example: [
+                    [106.6297, 10.8231],
+                    [106.6400, 10.8300],
+                    [106.6450, 10.8350],
+                  ],
+                },
+              },
+            },
             createdAt: { type: "string", format: "date-time" },
             updatedAt: { type: "string", format: "date-time" },
           },
@@ -203,6 +221,20 @@ const options = {
               example: 5000,
               description: "Maximum altitude in meters",
             },
+            route: {
+              type: "object",
+              description: "Optional planned path as GeoJSON LineString",
+              properties: {
+                type: { type: "string", enum: ["LineString"], example: "LineString" },
+                coordinates: {
+                  type: "array",
+                  items: {
+                    type: "array",
+                    items: { type: "number" },
+                  },
+                },
+              },
+            },
           },
         },
         UpdateDroneRequest: {
@@ -228,6 +260,19 @@ const options = {
               type: "string",
               enum: ["IDLE", "FLYING", "MAINTENANCE", "DISABLED"],
             },
+            route: {
+              type: "object",
+              properties: {
+                type: { type: "string", enum: ["LineString"] },
+                coordinates: {
+                  type: "array",
+                  items: {
+                    type: "array",
+                    items: { type: "number" },
+                  },
+                },
+              },
+            },
           },
         },
         DroneResponse: {
@@ -241,6 +286,19 @@ const options = {
             ownerType: { type: "string" },
             maxAltitude: { type: "number" },
             status: { type: "string" },
+            route: {
+              type: "object",
+              properties: {
+                type: { type: "string", example: "LineString" },
+                coordinates: {
+                  type: "array",
+                  items: {
+                    type: "array",
+                    items: { type: "number" },
+                  },
+                },
+              },
+            },
             createdAt: { type: "string", format: "date-time" },
             updatedAt: { type: "string", format: "date-time" },
           },
