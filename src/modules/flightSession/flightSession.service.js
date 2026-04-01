@@ -189,11 +189,31 @@ async function buildActualRoute(session) {
     flightSession: session._id,
   }).sort({ timestamp: 1 });
 
+  console.log(`\n🚁 [END FLIGHT] Đang gom tọa độ cho Session: ${session._id}`);
+  console.log(`🚁 [END FLIGHT] Tìm thấy: ${telemetryData.length} điểm trong Database!`);
+
   if (telemetryData.length >= 2) {
     session.actualRoute = {
       type: "LineString",
       coordinates: telemetryData.map((t) => t.location.coordinates),
     };
+    console.log(`✅ Đã vẽ xong đường bay với ${telemetryData.length} điểm!`);
+  } else if (telemetryData.length === 1) {
+    // Mongoose bắt buộc LineString phải có ít nhất 2 điểm. 
+    // Nếu chỉ có 1 điểm, ta nhân đôi nó lên để lách luật, tránh bị lỗi mảng rỗng.
+    const coord = telemetryData[0].location.coordinates;
+    session.actualRoute = {
+      type: "LineString",
+      coordinates: [coord, coord],
+    };
+    console.log(`⚠️ Chỉ có 1 điểm tọa độ. Đã nhân đôi để tạo đường thẳng hợp lệ!`);
+  } else {
+    // Nếu là 0, ghi nhận rỗng.
+    session.actualRoute = {
+      type: "LineString",
+      coordinates: [],
+    };
+    console.log(`❌ KHÔNG CÓ TỌA ĐỘ NÀO ĐƯỢC LƯU! (Lý do: Lái chưa đủ lâu hoặc chưa đợi Worker xả data trước khi ấn End)`);
   }
 }
 

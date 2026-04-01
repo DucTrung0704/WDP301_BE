@@ -1,5 +1,60 @@
 const Drone = require("../models/drone.model");
 
+const normalizeRoutePayload = (route) => {
+    // If route is omitted/null, do not persist the field.
+    if (route == null) {
+        return { value: undefined };
+    }
+
+    if (typeof route !== "object" || Array.isArray(route)) {
+        return { error: "route must be a GeoJSON object" };
+    }
+
+    const { type, coordinates } = route;
+
+    // Frontend may send only { type: "LineString" }; treat it as no route.
+    if (coordinates == null) {
+        return { value: undefined };
+    }
+
+    if (type && type !== "LineString") {
+        return { error: "route.type must be LineString" };
+    }
+
+    if (!Array.isArray(coordinates) || coordinates.length < 2) {
+        return {
+            error:
+                "route.coordinates must contain at least 2 points and each point must be [lng, lat] with valid ranges.",
+        };
+    }
+
+    const isValidCoordinates = coordinates.every((point) => {
+        if (!Array.isArray(point) || point.length !== 2) {
+            return false;
+        }
+
+        const [lng, lat] = point;
+        const isLngValid = Number.isFinite(lng) && lng >= -180 && lng <= 180;
+        const isLatValid = Number.isFinite(lat) && lat >= -90 && lat <= 90;
+
+        return isLngValid && isLatValid;
+    });
+
+    if (!isValidCoordinates) {
+        return {
+            error:
+                "route.coordinates must contain at least 2 points and each point must be [lng, lat] with valid ranges.",
+        };
+    }
+
+    return {
+        value: {
+            type: "LineString",
+            coordinates,
+        },
+    };
+};
+
 exports.createDrone = async (req, res) => {
     try {
         const {
@@ -20,15 +75,26 @@ exports.createDrone = async (req, res) => {
             return res.status(401).json({ message: "User not authenticated" });
         }
 
-        // Create drone with auto-generated droneId
-        const drone = await Drone.create({
+        const normalizedRoute = normalizeRoutePayload(route);
+        if (normalizedRoute.error) {
+            return res.status(400).json({ message: normalizedRoute.error });
+        }
+
+        const createPayload = {
             serialNumber,
             model,
             owner: req.user.id,
             ownerType: ownerType || "INDIVIDUAL",
             maxAltitude,
-            route,
-        });
+        };
+
+        // Persist route only when valid coordinates are present.
+        if (normalizedRoute.value) {
+            createPayload.route = normalizedRoute.value;
+        }
+
+        // Create drone with auto-generated droneId
+        const drone = await Drone.create(createPayload);
 
         // Populate owner data before sending response
         await drone.populate("owner", "email profile.fullName role");
@@ -36,6 +102,14 @@ exports.createDrone = async (req, res) => {
         res.status(201).json(drone);
     } catch (err) {
         console.error("Create drone error:", err);
+
+        if (err.name === "ValidationError") {
+            return res.status(400).json({
+                message: "Invalid drone data",
+                error: err.message,
+            });
+        }
+
         res.status(500).json({
             message: "Create drone failed",
             error: err.message
@@ -99,10 +173,19 @@ exports.updateDrone = async (req, res) => {
         // Prevent changing owner
         const { owner, ...updateData } = req.body;
 
+        if (Object.prototype.hasOwnProperty.call(updateData, "route")) {
+            const normalizedRoute = normalizeRoutePayload(updateData.route);
+            if (normalizedRoute.error) {
+                return res.status(400).json({ message: normalizedRoute.error });
+            }
+
+            updateData.route = normalizedRoute.value;
+        }
+
         const updatedDrone = await Drone.findByIdAndUpdate(
             req.params.id,
             updateData,
-            { new: true }
+            { new: true, runValidators: true }
         ).populate("owner", "email profile.fullName role");
 
         res.json(updatedDrone);
