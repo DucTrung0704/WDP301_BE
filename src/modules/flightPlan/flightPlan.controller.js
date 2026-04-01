@@ -149,24 +149,21 @@ exports.updateFlightPlan = async (req, res) => {
 };
 
 /**
- * POST /api/flight-plans/:id/submit — Submit → detect → APPROVED/REJECTED
+ * POST /api/flight-plans/:id/archive — Archive (soft-delete: ACTIVE → INACTIVE)
  */
-exports.submitFlightPlan = async (req, res) => {
+exports.archiveFlightPlan = async (req, res) => {
   try {
-    const result = await flightPlanService.submitFlightPlan(
+    const result = await flightPlanService.archiveFlightPlan(
       req.params.id,
       req.user.id,
     );
 
     res.json({
-      message:
-        result.approved ?
-          "Flight plan approved — no conflicts detected"
-          : "Flight plan rejected — conflicts detected",
+      message: "Flight plan archived successfully",
       ...result,
     });
   } catch (err) {
-    console.error("Submit flight plan error:", err);
+    console.error("Archive flight plan error:", err);
     if (
       err.message.includes("Unauthorized") ||
       err.message.includes("don't own")
@@ -177,31 +174,34 @@ exports.submitFlightPlan = async (req, res) => {
       return res.status(404).json({ message: err.message });
     }
     if (
-      err.message.includes("Cannot submit") ||
-      err.message.includes("must have") ||
+      err.message.includes("Cannot") ||
+      err.message.includes("archived") ||
       err.name === "ValidationError"
     ) {
       return res.status(400).json({ message: err.message });
     }
     res
       .status(500)
-      .json({ message: "Submit flight plan failed", error: err.message });
+      .json({ message: "Archive flight plan failed", error: err.message });
   }
 };
 
+// Backward compatibility: submitFlightPlan now calls archiveFlightPlan
+exports.submitFlightPlan = exports.archiveFlightPlan;
+
 /**
- * POST /api/flight-plans/:id/cancel — Cancel (DRAFT/REJECTED → CANCELLED)
+ * DELETE /api/flight-plans/:id — Delete (soft-delete: ACTIVE → INACTIVE)
  */
-exports.cancelFlightPlan = async (req, res) => {
+exports.deleteFlightPlan = async (req, res) => {
   try {
-    const flightPlan = await flightPlanService.cancelFlightPlan(
+    const flightPlan = await flightPlanService.deleteFlightPlan(
       req.params.id,
       req.user.id,
     );
 
-    res.json({ message: "Flight plan cancelled", flightPlan });
+    res.json({ message: "Flight plan deleted", flightPlan });
   } catch (err) {
-    console.error("Cancel flight plan error:", err);
+    console.error("Delete flight plan error:", err);
     if (
       err.message.includes("Unauthorized") ||
       err.message.includes("don't own")
@@ -211,17 +211,21 @@ exports.cancelFlightPlan = async (req, res) => {
     if (err.message.includes("not found")) {
       return res.status(404).json({ message: err.message });
     }
-    if (err.message.includes("Cannot cancel")) {
+    if (err.message.includes("Cannot")) {
       return res.status(400).json({ message: err.message });
     }
     res
       .status(500)
-      .json({ message: "Cancel flight plan failed", error: err.message });
+      .json({ message: "Delete flight plan failed", error: err.message });
   }
 };
 
+// Backward compatibility: cancelFlightPlan now calls deleteFlightPlan
+exports.cancelFlightPlan = exports.deleteFlightPlan;
+
 /**
- * GET /api/flight-plans/:id/conflicts — Xem xung đột của flight plan
+ * GET /api/flight-plans/:id/conflicts — Get conflict events for a flight plan
+ * Returns all conflict events linked to this plan, regardless of plan status
  */
 exports.getFlightPlanConflicts = async (req, res) => {
   try {
@@ -249,33 +253,5 @@ exports.getFlightPlanConflicts = async (req, res) => {
   } catch (err) {
     console.error("Get flight plan conflicts error:", err);
     res.status(500).json({ message: "Get conflicts failed" });
-  }
-};
-
-/**
- * DELETE /api/flight-plans/:id — Xóa flight plan (chỉ DRAFT)
- */
-exports.deleteFlightPlan = async (req, res) => {
-  try {
-    const flightPlan = await FlightPlan.findById(req.params.id);
-    if (!flightPlan) {
-      return res.status(404).json({ message: "Flight plan not found" });
-    }
-
-    if (flightPlan.pilot.toString() !== req.user.id.toString()) {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
-
-    if (flightPlan.status !== "DRAFT") {
-      return res.status(400).json({
-        message: `Cannot delete flight plan with status "${flightPlan.status}". Only DRAFT plans can be deleted.`,
-      });
-    }
-
-    await FlightPlan.findByIdAndDelete(req.params.id);
-    res.json({ message: "Flight plan deleted successfully" });
-  } catch (err) {
-    console.error("Delete flight plan error:", err);
-    res.status(500).json({ message: "Delete flight plan failed" });
   }
 };

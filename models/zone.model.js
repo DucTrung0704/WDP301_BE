@@ -68,8 +68,25 @@ ZoneSchema.path("maxAltitude").validate(function (value) {
   return value >= this.minAltitude;
 }, "maxAltitude must be greater than or equal to minAltitude.");
 
+// Validation: effectiveTo must be after or equal effectiveFrom when provided
+ZoneSchema.path("effectiveTo").validate(function (value) {
+  if (!value) return true;
+  if (!this.effectiveFrom) return true;
+  return value >= this.effectiveFrom;
+}, "effectiveTo must be greater than or equal to effectiveFrom.");
+
 // Pre-save hook for GeoJSON validation
 ZoneSchema.pre("save", async function () {
+  // Auto-calculate status from effective time window.
+  // Keep archived status untouched for soft-deleted zones.
+  if (this.status !== "archived") {
+    const now = new Date();
+    const from = this.effectiveFrom;
+    const to = this.effectiveTo;
+    const isActive = (!from || now >= from) && (!to || now <= to);
+    this.status = isActive ? "active" : "inactive";
+  }
+
   // 1. Validate Polygon Closure
   if (
     !this.geometry ||

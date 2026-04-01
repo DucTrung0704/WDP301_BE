@@ -1,6 +1,6 @@
 const FlightPlan = require("./flightPlan.model");
 const Drone = require("../../../models/drone.model");
-const { dismissOldConflicts } = require("../conflict/conflictDetection.service");
+const { dismissOldConflicts, haversineDistance } = require("../conflict/conflictDetection.service");
 
 const FLIGHT_PLAN_RULES = {
     MIN_WAYPOINTS: 2,
@@ -20,23 +20,6 @@ function assertValid(condition, message) {
     }
 }
 
-function haversineDistanceMeters(lat1, lng1, lat2, lng2) {
-    const toRad = (deg) => (deg * Math.PI) / 180;
-    const earthRadius = 6371000;
-
-    const dLat = toRad(lat2 - lat1);
-    const dLng = toRad(lng2 - lng1);
-
-    const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(toRad(lat1)) *
-        Math.cos(toRad(lat2)) *
-        Math.sin(dLng / 2) *
-        Math.sin(dLng / 2);
-
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return earthRadius * c;
-}
 
 function validateWaypoint(waypoint, index) {
     const waypointPosition = index + 1;
@@ -103,7 +86,7 @@ function validateWaypointOrderingAndGeometry(waypoints) {
 
         if (index > 0) {
             const previousWaypoint = sortedWaypoints[index - 1];
-            const distanceMeters = haversineDistanceMeters(
+            const distanceMeters = haversineDistance(
                 previousWaypoint.latitude,
                 previousWaypoint.longitude,
                 waypoint.latitude,
@@ -121,6 +104,14 @@ function validateWaypointOrderingAndGeometry(waypoints) {
 function validateFlightPlanPayload(data) {
     assertValid(data && typeof data === "object", "Invalid payload.");
     assertValid(data.drone, "drone is required.");
+    assertValid(
+        Number.isFinite(data.batteryPercentageUsed) && data.batteryPercentageUsed >= 0 && data.batteryPercentageUsed <= 100,
+        "batteryPercentageUsed is required and must be between 0 and 100.",
+    );
+    assertValid(
+        Number.isFinite(data.estimatedFlightTime) && data.estimatedFlightTime > 0,
+        "estimatedFlightTime is required and must be a positive number.",
+    );
 
     assertValid(Array.isArray(data.waypoints), "waypoints must be an array.");
     assertValid(
@@ -189,8 +180,7 @@ async function createFlightPlan(data, userId) {
     const flightPlan = new FlightPlan({
         ...normalizedData,
         pilot: userId,
-        status: "DRAFT",
-        conflictStatus: "CLEAR",
+        status: "ACTIVE",
     });
 
     await flightPlan.save();
@@ -205,10 +195,8 @@ async function updateFlightPlan(id, data, userId) {
         throw new Error("Unauthorized: You don't own this flight plan");
     }
 
-    if (!["DRAFT", "REJECTED"].includes(flightPlan.status)) {
-        throw new Error(
-            `Cannot update flight plan with status "${flightPlan.status}". Only DRAFT or REJECTED plans can be edited.`,
-        );
+    if (flightPlan.status === "INACTIVE") {
+        throw new Error("Cannot update an archived (inactive) flight plan");
     }
 
     const mergedPayload = {
@@ -216,6 +204,8 @@ async function updateFlightPlan(id, data, userId) {
         priority: data.priority ?? flightPlan.priority,
         waypoints: data.waypoints ?? flightPlan.waypoints,
         notes: data.notes ?? flightPlan.notes,
+        batteryPercentageUsed: data.batteryPercentageUsed ?? flightPlan.batteryPercentageUsed,
+        estimatedFlightTime: data.estimatedFlightTime ?? flightPlan.estimatedFlightTime,
     };
 
     const normalizedData = validateFlightPlanPayload(mergedPayload);
@@ -226,13 +216,7 @@ async function updateFlightPlan(id, data, userId) {
 
     validateAltitudeAgainstDroneCapability(normalizedData.waypoints, drone);
 
-    if (flightPlan.status === "REJECTED") {
-        flightPlan.status = "DRAFT";
-        flightPlan.conflictStatus = "CLEAR";
-        await dismissOldConflicts(id);
-    }
-
-    const allowedFields = ["drone", "priority", "waypoints", "notes"];
+    const allowedFields = ["drone", "priority", "waypoints", "notes", "batteryPercentageUsed", "estimatedFlightTime"];
     for (const field of allowedFields) {
         if (normalizedData[field] !== undefined) {
             flightPlan[field] = normalizedData[field];
@@ -243,7 +227,7 @@ async function updateFlightPlan(id, data, userId) {
     return flightPlan;
 }
 
-async function submitFlightPlan(id, userId) {
+async function archiveFlightPlan(id, userId) {
     const flightPlan = await FlightPlan.findById(id);
     if (!flightPlan) throw new Error("Flight plan not found");
 
@@ -251,58 +235,32 @@ async function submitFlightPlan(id, userId) {
         throw new Error("Unauthorized: You don't own this flight plan");
     }
 
-    if (flightPlan.status !== "DRAFT") {
-        throw new Error(
-            `Cannot submit flight plan with status "${flightPlan.status}". Only DRAFT plans can be submitted.`,
-        );
-    }
-
-    const normalizedData = validateFlightPlanPayload({
-        drone: flightPlan.drone,
-        priority: flightPlan.priority,
-        waypoints: flightPlan.waypoints,
-        notes: flightPlan.notes,
-    });
-
-    const drone = await validateDroneOwnershipAndAvailability(
-        normalizedData.drone,
-        userId,
-    );
-
-    validateAltitudeAgainstDroneCapability(normalizedData.waypoints, drone);
-
-    flightPlan.status = "APPROVED";
-    flightPlan.conflictStatus = "CLEAR";
-    await flightPlan.save();
-
-    const finalPlan = await FlightPlan.findById(id)
-        .populate("drone", "droneId serialNumber model")
-        .populate("pilot", "email profile.fullName");
-
-    return {
-        flightPlan: finalPlan,
-        conflicts: [],
-        approved: true,
-    };
-}
-
-async function cancelFlightPlan(id, userId) {
-    const flightPlan = await FlightPlan.findById(id);
-    if (!flightPlan) throw new Error("Flight plan not found");
-
-    if (flightPlan.pilot.toString() !== userId.toString()) {
-        throw new Error("Unauthorized: You don't own this flight plan");
-    }
-
-    if (!["DRAFT", "REJECTED"].includes(flightPlan.status)) {
-        throw new Error(
-            `Cannot cancel flight plan with status "${flightPlan.status}". Only DRAFT or REJECTED plans can be cancelled.`,
-        );
+    if (flightPlan.status === "INACTIVE") {
+        throw new Error("Flight plan is already archived");
     }
 
     await dismissOldConflicts(id);
 
-    flightPlan.status = "CANCELLED";
+    flightPlan.status = "INACTIVE";
+    await flightPlan.save();
+
+    return {
+        flightPlan,
+        archived: true,
+    };
+}
+
+async function deleteFlightPlan(id, userId) {
+    const flightPlan = await FlightPlan.findById(id);
+    if (!flightPlan) throw new Error("Flight plan not found");
+
+    if (flightPlan.pilot.toString() !== userId.toString()) {
+        throw new Error("Unauthorized: You don't own this flight plan");
+    }
+
+    await dismissOldConflicts(id);
+
+    flightPlan.status = "INACTIVE";
     await flightPlan.save();
 
     return flightPlan;
@@ -311,6 +269,6 @@ async function cancelFlightPlan(id, userId) {
 module.exports = {
     createFlightPlan,
     updateFlightPlan,
-    submitFlightPlan,
-    cancelFlightPlan,
+    archiveFlightPlan,
+    deleteFlightPlan,
 };
