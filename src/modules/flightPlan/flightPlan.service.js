@@ -155,9 +155,9 @@ async function validateDroneOwnershipAndAvailability(droneId, userId) {
         throw new Error("Unauthorized: You don't own this drone");
     }
 
-    if (["MAINTENANCE", "DISABLED"].includes(drone.status)) {
+    if (drone.status !== "IDLE") {
         throw createValidationError(
-            `Drone status "${drone.status}" is not eligible for flight plan operations.`,
+            `Drone status "${drone.status}" is not eligible for flight plan operations. Drone must be IDLE.`,
         );
     }
 
