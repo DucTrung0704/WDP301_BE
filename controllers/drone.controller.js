@@ -1,5 +1,12 @@
 const Drone = require("../models/drone.model");
 
+const mapRoleToOwnerType = (role) => {
+    if (role === "FLEET_OPERATOR") {
+        return "FLEET";
+    }
+    return "INDIVIDUAL";
+};
+
 const normalizeRoutePayload = (route) => {
     // If route is omitted/null, do not persist the field.
     if (route == null) {
@@ -60,7 +67,6 @@ exports.createDrone = async (req, res) => {
         const {
             serialNumber,
             model,
-            ownerType,
             maxAltitude,
             route,
         } = req.body;
@@ -84,7 +90,7 @@ exports.createDrone = async (req, res) => {
             serialNumber,
             model,
             owner: req.user.id,
-            ownerType: ownerType || "INDIVIDUAL",
+            ownerType: mapRoleToOwnerType(req.user.role),
             maxAltitude,
         };
 
