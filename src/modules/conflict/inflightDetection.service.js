@@ -41,12 +41,28 @@ async function runInflightChecks(session, telemetry) {
  */
 async function proximityCheck(session, telemetry, currentPos) {
   const { D_MIN, H_MIN } = config.pairwise;
+  const { PROXIMITY_CHECK_RADIUS } = config.inflight;
 
   // ✅ TIER 1 OPTIMIZATION: Get drone positions from Redis cache (instant!)
   // Instead of querying DB for each drone, get all latest positions from cache
   const allDroneLocations = await cacheOps.getAllDroneLocations();
 
   if (allDroneLocations.length === 0) return;
+
+  // ✅ TIER 2 OPTIMIZATION: Bounding-box pre-filter using PROXIMITY_CHECK_RADIUS
+  // ~1.1× radius margin to account for approximation error at cell edges
+  const latDelta = (PROXIMITY_CHECK_RADIUS * 1.1) / 111320;
+  const lngDelta =
+    (PROXIMITY_CHECK_RADIUS * 1.1) /
+    (111320 * Math.cos((currentPos.lat * Math.PI) / 180));
+
+  const nearbyDroneLocations = allDroneLocations.filter(
+    (d) =>
+      Math.abs(d.lat - currentPos.lat) <= latDelta &&
+      Math.abs(d.lng - currentPos.lng) <= lngDelta,
+  );
+
+  if (nearbyDroneLocations.length === 0) return;
 
   // Map droneId to sessionId for reference (needed for ConflictEvent)
   const activeSessions = await FlightSession.find({
@@ -58,8 +74,8 @@ async function proximityCheck(session, telemetry, currentPos) {
     activeSessions.map(s => [s.drone.toString(), s._id])
   );
 
-  // Check proximity with each cached drone location
-  for (const otherDroneLocation of allDroneLocations) {
+  // Check proximity with each nearby cached drone location
+  for (const otherDroneLocation of nearbyDroneLocations) {
     const otherSessionId = droneToSession.get(otherDroneLocation.droneId);
 
     if (!otherSessionId) continue;  // Skip if not in active session

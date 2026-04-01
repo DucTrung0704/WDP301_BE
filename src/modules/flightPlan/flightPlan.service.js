@@ -1,6 +1,6 @@
 const FlightPlan = require("./flightPlan.model");
 const Drone = require("../../../models/drone.model");
-const { dismissOldConflicts } = require("../conflict/conflictDetection.service");
+const { dismissOldConflicts, haversineDistance } = require("../conflict/conflictDetection.service");
 
 const FLIGHT_PLAN_RULES = {
     MIN_WAYPOINTS: 2,
@@ -20,23 +20,6 @@ function assertValid(condition, message) {
     }
 }
 
-function haversineDistanceMeters(lat1, lng1, lat2, lng2) {
-    const toRad = (deg) => (deg * Math.PI) / 180;
-    const earthRadius = 6371000;
-
-    const dLat = toRad(lat2 - lat1);
-    const dLng = toRad(lng2 - lng1);
-
-    const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(toRad(lat1)) *
-        Math.cos(toRad(lat2)) *
-        Math.sin(dLng / 2) *
-        Math.sin(dLng / 2);
-
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return earthRadius * c;
-}
 
 function validateWaypoint(waypoint, index) {
     const waypointPosition = index + 1;
@@ -103,7 +86,7 @@ function validateWaypointOrderingAndGeometry(waypoints) {
 
         if (index > 0) {
             const previousWaypoint = sortedWaypoints[index - 1];
-            const distanceMeters = haversineDistanceMeters(
+            const distanceMeters = haversineDistance(
                 previousWaypoint.latitude,
                 previousWaypoint.longitude,
                 waypoint.latitude,
