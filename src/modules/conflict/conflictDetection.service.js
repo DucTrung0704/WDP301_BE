@@ -301,87 +301,13 @@ async function dismissOldConflicts(flightPlanId) {
 }
 
 /**
- * Orchestrator: chạy tất cả thuật toán conflict detection cho 1 flight plan
- * @param {string} flightPlanId
- * @returns {{ hasConflicts: boolean, conflicts: Array }}
+ * Export functions
  */
-async function checkFlightPlanConflicts(flightPlanId) {
-  const flightPlan = await FlightPlan.findById(flightPlanId);
-  if (!flightPlan) {
-    throw new Error("Flight plan not found");
-  }
-
-  // Dismiss conflicts cũ (cho trường hợp resubmit)
-  await dismissOldConflicts(flightPlanId);
-
-  // Lấy các flight plans đã approved có thời gian chồng lấn
-  const existingPlans = await FlightPlan.find({
-    _id: { $ne: flightPlanId },
-    status: "APPROVED",
-    plannedStart: { $lt: flightPlan.plannedEnd },
-    plannedEnd: { $gt: flightPlan.plannedStart },
-  });
-
-  let allConflicts = [];
-
-  if (existingPlans.length > 0) {
-    // Thuật toán 1: Pairwise
-    const pairwiseConflicts = pairwiseConflictCheck(flightPlan, existingPlans);
-    allConflicts.push(...pairwiseConflicts);
-
-    // Thuật toán 2: Segmentation
-    const segConflicts = segmentationConflictCheck(flightPlan, existingPlans);
-
-    // Merge: chỉ thêm segmentation conflicts cho các cặp chưa phát hiện bằng pairwise
-    const pairwisePairs = new Set(
-      pairwiseConflicts.map((c) =>
-        c.flightPlans
-          .map((id) => id.toString())
-          .sort()
-          .join("_"),
-      ),
-    );
-
-    for (const sc of segConflicts) {
-      const pairKey = sc.flightPlans
-        .map((id) => id.toString())
-        .sort()
-        .join("_");
-      if (!pairwisePairs.has(pairKey)) {
-        allConflicts.push(sc);
-      }
-    }
-  }
-
-  // Lưu ConflictEvents vào database
-  const savedConflicts = [];
-  for (const conflict of allConflicts) {
-    const event = await ConflictEvent.create({
-      ...conflict,
-      detectedAt: new Date(),
-      status: "ACTIVE",
-    });
-    savedConflicts.push(event);
-  }
-
-  // Cập nhật conflictStatus của flight plan
-  const hasConflicts = savedConflicts.length > 0;
-  flightPlan.conflictStatus = hasConflicts ? "CONFLICT_DETECTED" : "CLEAR";
-  flightPlan.status = hasConflicts ? "REJECTED" : "APPROVED";
-  await flightPlan.save();
-
-  return {
-    hasConflicts,
-    conflicts: savedConflicts,
-  };
-}
-
 module.exports = {
   // Algorithms
   pairwiseConflictCheck,
   segmentationConflictCheck,
-  // Orchestrator
-  checkFlightPlanConflicts,
+  // Utility
   dismissOldConflicts,
   // Helpers (exported for testing)
   haversineDistance,

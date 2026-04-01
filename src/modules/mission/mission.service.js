@@ -49,9 +49,9 @@ async function assertFlightPlanUsableForMission(flightPlanId, userId, role) {
         throw new Error("Unauthorized: You don't own this flight plan");
     }
 
-    if (!["DRAFT", "APPROVED"].includes(flightPlan.status)) {
+    if (flightPlan.status !== "ACTIVE") {
         throw createValidationError(
-            `Cannot add flight plan with status "${flightPlan.status}" to mission.`,
+            `Cannot add flight plan with status "${flightPlan.status}" to mission. Only ACTIVE plans can be used.`,
         );
     }
 
@@ -83,6 +83,40 @@ async function assertNoDroneOverlapInMission({
     if (hasOverlap) {
         throw createValidationError(
             "Mission schedule overlaps for the same drone. Adjust plannedStart/plannedEnd.",
+        );
+    }
+}
+
+async function assertNoDroneOverlapAcrossMissions({
+    missionId,
+    droneId,
+    plannedStart,
+    plannedEnd,
+    excludeMissionPlanId,
+}) {
+    // Kiểm tra xem drone có bị conflict với các missions khác không (cùng thời gian)
+    const overlappingMissionPlans = await MissionPlan.find({
+        mission: { $ne: missionId },
+        status: "SCHEDULED",
+        plannedStart: { $lt: plannedEnd },
+        plannedEnd: { $gt: plannedStart },
+        ...(excludeMissionPlanId ? { _id: { $ne: excludeMissionPlanId } } : {}),
+    }).populate("flightPlan", "drone").populate("mission", "name");
+
+    const conflictingPlans = overlappingMissionPlans.filter(
+        (missionPlan) =>
+            missionPlan.flightPlan &&
+            missionPlan.flightPlan.drone &&
+            missionPlan.flightPlan.drone.toString() === droneId.toString(),
+    );
+
+    if (conflictingPlans.length > 0) {
+        const conflictingMissionNames = conflictingPlans
+            .map((mp) => mp.mission?.name || "Unknown")
+            .join(", ");
+        
+        throw createValidationError(
+            `Drone is already scheduled in another mission(s) at the same time: [${conflictingMissionNames}]. Adjust plannedStart/plannedEnd or use a different drone.`,
         );
     }
 }
@@ -159,7 +193,16 @@ async function addPlanToMission(missionId, data, userId, role) {
         role,
     );
 
+    // Check drone overlap trong cùng mission
     await assertNoDroneOverlapInMission({
+        missionId: mission._id,
+        droneId: flightPlan.drone,
+        plannedStart,
+        plannedEnd,
+    });
+
+    // Check drone overlap across các missions khác
+    await assertNoDroneOverlapAcrossMissions({
         missionId: mission._id,
         droneId: flightPlan.drone,
         plannedStart,
@@ -225,7 +268,17 @@ async function updateMissionPlan(
 
     assertValid(plannedEnd > plannedStart, "plannedEnd must be after plannedStart.");
 
+    // Check drone overlap trong cùng mission
     await assertNoDroneOverlapInMission({
+        missionId: mission._id,
+        droneId: missionPlan.flightPlan.drone,
+        plannedStart,
+        plannedEnd,
+        excludeMissionPlanId: missionPlan._id,
+    });
+
+    // Check drone overlap across các missions khác
+    await assertNoDroneOverlapAcrossMissions({
         missionId: mission._id,
         droneId: missionPlan.flightPlan.drone,
         plannedStart,
