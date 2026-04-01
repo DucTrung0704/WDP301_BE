@@ -39,6 +39,20 @@ async function getMissionForUser(missionId, userId, role) {
     return mission;
 }
 
+function getMissionFlightPlanPopulateOptions() {
+    return {
+        path: "flightPlan",
+        populate: {
+            path: "drone",
+            select: "droneId serialNumber model owner ownerType maxAltitude status route createdAt updatedAt",
+            populate: {
+                path: "owner",
+                select: "email profile.fullName role",
+            },
+        },
+    };
+}
+
 async function assertFlightPlanUsableForMission(flightPlanId, userId, role) {
     const flightPlan = await FlightPlan.findById(flightPlanId);
     if (!flightPlan) {
@@ -113,7 +127,7 @@ async function getMissionDetail(missionId, userId, role) {
     const mission = await getMissionForUser(missionId, userId, role);
 
     const missionPlans = await MissionPlan.find({ mission: mission._id })
-        .populate("flightPlan")
+        .populate(getMissionFlightPlanPopulateOptions())
         .sort({ order: 1, plannedStart: 1, createdAt: 1 });
 
     return { mission, missionPlans };
@@ -195,7 +209,7 @@ async function addPlanToMission(missionId, data, userId, role) {
         notes: data.notes,
     });
 
-    return missionPlan.populate("flightPlan");
+    return missionPlan.populate(getMissionFlightPlanPopulateOptions());
 }
 
 async function updateMissionPlan(
@@ -254,7 +268,7 @@ async function updateMissionPlan(
     }
 
     await missionPlan.save();
-    return missionPlan.populate("flightPlan");
+    return missionPlan.populate(getMissionFlightPlanPopulateOptions());
 }
 
 async function removePlanFromMission(missionId, missionPlanId, userId, role) {

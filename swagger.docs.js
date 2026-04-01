@@ -1995,6 +1995,78 @@
  *                   type: array
  *                   items:
  *                     $ref: '#/components/schemas/MissionPlanResponse'
+ *             example:
+ *               mission:
+ *                 _id: "69d1f0b7c3a9e1207b41a102"
+ *                 name: "Morning Irrigation Run"
+ *                 description: "Mission for field irrigation monitoring"
+ *                 createdBy: "69b0047c11aa4207d9f44321"
+ *                 status: "ACTIVE"
+ *                 createdAt: "2026-04-03T05:20:15.120Z"
+ *                 updatedAt: "2026-04-03T06:45:02.441Z"
+ *                 __v: 0
+ *               missionPlans:
+ *                 - _id: "69d1f298c3a9e1207b41a1c7"
+ *                   mission: "69d1f0b7c3a9e1207b41a102"
+ *                   flightPlan:
+ *                     routeGeometry:
+ *                       type: "LineString"
+ *                       coordinates:
+ *                         - [106.701245, 10.775321]
+ *                         - [106.712884, 10.768904]
+ *                     _id: "69d1f1e1c3a9e1207b41a17b"
+ *                     drone:
+ *                       _id: "69d1eeb2c3a9e1207b419f44"
+ *                       droneId: "DRONE-IRR-001"
+ *                       serialNumber: "SN-IRR-2026-001"
+ *                       model: "DJI Agras T25"
+ *                       owner:
+ *                         _id: "69b0047c11aa4207d9f44321"
+ *                         email: "pilot@example.com"
+ *                         profile:
+ *                           fullName: "Nguyen Van A"
+ *                         role: "FLEET_OPERATOR"
+ *                       ownerType: "FLEET"
+ *                       maxAltitude: 120
+ *                       status: "IDLE"
+ *                       route:
+ *                         type: "LineString"
+ *                         coordinates:
+ *                           - [106.701245, 10.775321]
+ *                           - [106.712884, 10.768904]
+ *                       createdAt: "2026-04-03T05:10:22.114Z"
+ *                       updatedAt: "2026-04-03T05:10:22.114Z"
+ *                     pilot: "69b0047c11aa4207d9f44321"
+ *                     status: "DRAFT"
+ *                     priority: 2
+ *                     waypoints:
+ *                       - sequenceNumber: 1
+ *                         latitude: 10.775321
+ *                         longitude: 106.701245
+ *                         altitude: 60
+ *                         speed: 12
+ *                         estimatedTime: "2026-04-03T05:30:00.000Z"
+ *                         action: "TAKEOFF"
+ *                       - sequenceNumber: 2
+ *                         latitude: 10.768904
+ *                         longitude: 106.712884
+ *                         altitude: 65
+ *                         speed: 12
+ *                         estimatedTime: "2026-04-03T05:42:00.000Z"
+ *                         action: "LAND"
+ *                     conflictStatus: "CLEAR"
+ *                     notes: "Irrigation route for sector B"
+ *                     createdAt: "2026-04-03T05:28:14.221Z"
+ *                     updatedAt: "2026-04-03T05:28:14.221Z"
+ *                     __v: 0
+ *                   plannedStart: "2026-04-03T06:00:00.000Z"
+ *                   plannedEnd: "2026-04-03T06:20:00.000Z"
+ *                   order: 1
+ *                   status: "SCHEDULED"
+ *                   notes: "Primary route for morning shift"
+ *                   createdAt: "2026-04-03T05:40:48.930Z"
+ *                   updatedAt: "2026-04-03T05:40:48.930Z"
+ *                   __v: 0
  *       404:
  *         description: Mission not found
  *
