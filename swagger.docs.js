@@ -1585,9 +1585,10 @@
  * @swagger
  * /api/flight-plans:
  *   post:
- *     summary: Tạo mới kế hoạch bay (DRAFT)
+ *     summary: Tạo mới kế hoạch bay (ACTIVE)
  *     description: |
- *       Tạo một flight plan dạng route template ở trạng thái DRAFT.
+ *       Tạo một flight plan dạng route template ở trạng thái ACTIVE.
+ *       Yêu cầu: batteryPercentageUsed (0-100%) và estimatedFlightTime (phút hoặc giây).
  *       Flight plan không còn chứa thời gian bay tổng thể.
  *       Lịch bay (plannedStart/plannedEnd) được quản lý ở MissionPlan.
  *       Hệ thống tự động tạo routeGeometry (GeoJSON LineString) từ waypoints.
@@ -1596,6 +1597,8 @@
  *       - sequenceNumber phải liên tục 1..N, không trùng
  *       - không cho phép segment quá dài
  *       - altitude waypoint không vượt maxAltitude của drone (nếu có)
+ *       - batteryPercentageUsed: 0-100
+ *       - estimatedFlightTime: > 0
  *     tags: [Flight Plans]
  *     security:
  *       - bearerAuth: []
@@ -1608,6 +1611,8 @@
  *           example:
  *             drone: "507f1f77bcf86cd799439011"
  *             priority: 1
+ *             batteryPercentageUsed: 75
+ *             estimatedFlightTime: 1800
  *             waypoints:
  *               - sequenceNumber: 1
  *                 latitude: 10.8231
@@ -1660,8 +1665,8 @@
  *         in: query
  *         schema:
  *           type: string
- *           enum: [DRAFT, PENDING, APPROVED, REJECTED, CANCELLED]
- *         description: Filter theo trạng thái flight plan
+ *           enum: [ACTIVE, INACTIVE]
+ *         description: Filter theo trạng thái flight plan (ACTIVE hoặc INACTIVE)
  *       - name: page
  *         in: query
  *         schema:
@@ -1739,11 +1744,12 @@
  *         description: Flight plan not found
  *
  *   put:
- *     summary: Cập nhật kế hoạch bay (chỉ DRAFT/REJECTED)
+ *     summary: Cập nhật kế hoạch bay (ACTIVE)
  *     description: |
- *       Cập nhật flight plan. Chỉ cho phép khi status là DRAFT hoặc REJECTED.
- *       Nếu plan đang REJECTED, sẽ tự động reset về DRAFT và dismiss các conflicts cũ.
+ *       Cập nhật flight plan. Chỉ cho phép khi status là ACTIVE.
+ *       Không được cập nhật plan nếu đã archived (INACTIVE).
  *       Mọi field route template được gửi lên đều được validate lại theo cùng rule như khi tạo mới.
+ *       Có thể cập nhật: drone, priority, waypoints, notes, batteryPercentageUsed, estimatedFlightTime.
  *     tags: [Flight Plans]
  *     security:
  *       - bearerAuth: []
@@ -1776,8 +1782,8 @@
  *         description: Flight plan not found
  *
  *   delete:
- *     summary: Xóa kế hoạch bay (chỉ DRAFT)
- *     tags: [Flight Plans]
+ *     summary: Xoá/Xóa (soft-delete) kế hoạch bay (ACTIVE → INACTIVE)
+ *     description: Thực hiện soft delete bằng cách chuyển status từ ACTIVE sang INACTIVE. Plan bị archived sẽ không được sử dụng trong mission.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -1811,11 +1817,11 @@
  * @swagger
  * /api/flight-plans/{id}/submit:
  *   post:
- *     summary: Submit kế hoạch bay (DRAFT -> APPROVED)
+ *     summary: Archive kế hoạch bay (soft-delete: ACTIVE → INACTIVE)
  *     description: |
- *       Submit flight plan route template sau khi validate lại dữ liệu route.
- *       Scheduling và kiểm tra chồng lấn theo thời gian được xử lý ở MissionPlan.
- *       Không chạy conflict/time checks ở bước submit plan.
+ *       Archive flight plan bằng cách chuyển status từ ACTIVE sang INACTIVE.
+ *       Endpoint này được giữ nguyên tên /submit để backward compatibility, nhưng thực hiện hành động archive.
+ *       Plane bị archived sẽ không thể được thêm vào mission mới.
  *     tags: [Flight Plans]
  *     security:
  *       - bearerAuth: []
@@ -1827,23 +1833,18 @@
  *           type: string
  *     responses:
  *       200:
- *         description: Submit result (approved)
+ *         description: Archive result (soft-delete)
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/SubmitFlightPlanResponse'
+ *               $ref: '#/components/schemas/ArchivedFlightPlanResponse'
  *             examples:
- *               approved:
- *                 summary: Flight plan approved
+ *               archived:
+ *                 summary: Flight plan archived successfully
  *                 value:
- *                   message: "Flight plan approved — no conflicts detected"
- *                   approved: true
- *                   conflicts: []
- *               rejected:
- *                 summary: Flight plan rejected
- *                 value:
- *                   message: "Flight plan rejected — conflicts detected"
- *                   approved: false
+ *                   message: "Flight plan archived successfully"
+ *                   status: "INACTIVE"
+ *                   _id: "507f1f77bcf86cd799439011"
  *       400:
  *         description: Cannot submit (wrong status hoặc vi phạm validate)
  *       401:
@@ -1860,7 +1861,11 @@
  * @swagger
  * /api/flight-plans/{id}/cancel:
  *   post:
- *     summary: Hủy kế hoạch bay (DRAFT/REJECTED → CANCELLED)
+ *     summary: Hủy/Archive kế hoạch bay (ACTIVE → INACTIVE)
+ *     description: |
+ *       Archive flight plan bằng cách chuyển status từ ACTIVE sang INACTIVE.
+ *       Endpoint này tương đương với /submit và /delete, giữ nguyên tên để backward compatibility.
+ *       Plane bị archived sẽ không thể được thêm vào mission mới.
  *     tags: [Flight Plans]
  *     security:
  *       - bearerAuth: []
@@ -1872,19 +1877,20 @@
  *           type: string
  *     responses:
  *       200:
- *         description: Cancelled
+ *         description: Archive result (soft-delete)
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Flight plan cancelled"
- *                 flightPlan:
- *                   $ref: '#/components/schemas/FlightPlanResponse'
+ *               $ref: '#/components/schemas/ArchivedFlightPlanResponse'
+ *             examples:
+ *               archived:
+ *                 summary: Flight plan archived successfully
+ *                 value:
+ *                   message: "Flight plan archived successfully"
+ *                   status: "INACTIVE"
+ *                   _id: "507f1f77bcf86cd799439011"
  *       400:
- *         description: Cannot cancel (wrong status)
+ *         description: Cannot cancel (wrong status hoặc plan không tồn tại)
  *       401:
  *         description: Unauthorized
  *       403:
@@ -2337,7 +2343,7 @@
  *   post:
  *     summary: Bắt đầu phiên bay theo kế hoạch (PLANNED)
  *     description: |
- *       Tạo FlightSession từ FlightPlan đã APPROVED.
+ *       Tạo FlightSession từ FlightPlan đã ACTIVE.
  *       Drone phải ở trạng thái IDLE. Tự động chuyển drone → FLYING.
  *     tags: [Flight Sessions]
  *     security:
@@ -2361,7 +2367,7 @@
  *             schema:
  *               $ref: '#/components/schemas/FlightSessionResponse'
  *       400:
- *         description: Plan not APPROVED, drone not IDLE, or drone already has active session
+ *         description: Plan not ACTIVE, drone not IDLE, or drone already has active session
  *       401:
  *         description: Unauthorized
  *       404:

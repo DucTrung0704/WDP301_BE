@@ -7,9 +7,9 @@ const {
 const flightPlanController = require("./flightPlan.controller");
 
 // Tất cả routes yêu cầu authentication
-// Chỉ INDIVIDUAL_OPERATOR và FLEET_OPERATOR được tạo/sửa/submit flight plan templates
+// Chỉ INDIVIDUAL_OPERATOR và FLEET_OPERATOR được tạo/sửa/update flight plan templates
 
-// Tạo flight plan mới (DRAFT)
+// Tạo flight plan mới (ACTIVE)
 router.post(
   "/",
   authenticate,
@@ -33,7 +33,7 @@ router.get(
   flightPlanController.getFlightPlanById,
 );
 
-// Cập nhật flight plan (DRAFT/REJECTED)
+// Cập nhật flight plan (ACTIVE)
 router.put(
   "/:id",
   authenticate,
@@ -41,20 +41,20 @@ router.put(
   flightPlanController.updateFlightPlan,
 );
 
-// Submit flight plan template
+// Archive flight plan (soft-delete: ACTIVE → INACTIVE)
 router.post(
   "/:id/submit",
   authenticate,
   authorizeRoles("INDIVIDUAL_OPERATOR", "FLEET_OPERATOR"),
-  flightPlanController.submitFlightPlan,
+  flightPlanController.archiveFlightPlan,
 );
 
-// Cancel flight plan
+// Delete flight plan (soft-delete: ACTIVE → INACTIVE)
 router.post(
   "/:id/cancel",
   authenticate,
   authorizeRoles("INDIVIDUAL_OPERATOR", "FLEET_OPERATOR"),
-  flightPlanController.cancelFlightPlan,
+  flightPlanController.deleteFlightPlan,
 );
 
 // Xem xung đột của flight plan
@@ -65,7 +65,7 @@ router.get(
   flightPlanController.getFlightPlanConflicts,
 );
 
-// Xóa flight plan (chỉ DRAFT)
+// Delete flight plan (soft-delete: ACTIVE → INACTIVE) — same as /cancel
 router.delete(
   "/:id",
   authenticate,
