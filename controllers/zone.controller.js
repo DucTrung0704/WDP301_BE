@@ -7,6 +7,31 @@ const isEffective = (zone) => {
   return true;
 };
 
+// Refresh active/inactive statuses from effective time window.
+// Archived zones are excluded to preserve soft-delete behavior.
+const refreshZoneStatuses = async () => {
+  const now = new Date();
+
+  // Zones outside their effective window become inactive.
+  await Zone.updateMany(
+    {
+      status: { $ne: "archived" },
+      $or: [{ effectiveFrom: { $gt: now } }, { effectiveTo: { $lt: now } }],
+    },
+    { $set: { status: "inactive" } },
+  );
+
+  // Zones inside their effective window become active.
+  await Zone.updateMany(
+    {
+      status: { $ne: "archived" },
+      effectiveFrom: { $lte: now },
+      $or: [{ effectiveTo: { $exists: false } }, { effectiveTo: null }, { effectiveTo: { $gte: now } }],
+    },
+    { $set: { status: "active" } },
+  );
+};
+
 // CREATE Zone
 exports.createZone = async (req, res) => {
   try {
@@ -59,6 +84,8 @@ exports.createZone = async (req, res) => {
 // GET Zones with pagination, search, and sorting
 exports.getZones = async (req, res) => {
   try {
+    await refreshZoneStatuses();
+
     const {
       status,
       type,
@@ -136,6 +163,8 @@ exports.getZones = async (req, res) => {
 // GET Zone by ID
 exports.getZoneById = async (req, res) => {
   try {
+    await refreshZoneStatuses();
+
     const { id } = req.params;
 
     const zone = await Zone.findById(id);
@@ -167,7 +196,6 @@ exports.updateZone = async (req, res) => {
       maxAltitude,
       effectiveFrom,
       effectiveTo,
-      status,
     } = req.body;
 
     // Find the zone first
@@ -191,7 +219,6 @@ exports.updateZone = async (req, res) => {
     if (maxAltitude !== undefined) zone.maxAltitude = maxAltitude;
     if (effectiveFrom !== undefined) zone.effectiveFrom = effectiveFrom;
     if (effectiveTo !== undefined) zone.effectiveTo = effectiveTo;
-    if (status !== undefined && status !== "archived") zone.status = status;
 
     // Save will trigger pre-save validation (polygon closure, self-intersection)
     const updatedZone = await zone.save();
@@ -223,6 +250,8 @@ exports.updateZone = async (req, res) => {
 // CHECK Spatial Status
 exports.checkPoint = async (req, res) => {
   try {
+    await refreshZoneStatuses();
+
     const { lat, lng, altitude } = req.body;
 
     if (lat === undefined || lng === undefined || altitude === undefined) {

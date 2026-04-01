@@ -54,8 +54,9 @@ const FlightPlanSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["DRAFT", "PENDING", "APPROVED", "REJECTED", "CANCELLED"],
-      default: "DRAFT",
+      enum: ["ACTIVE", "INACTIVE"],
+      default: "ACTIVE",
+      index: true,
     },
     priority: {
       type: Number,
@@ -82,10 +83,16 @@ const FlightPlanSchema = new mongoose.Schema(
         type: [[Number]], // [[lng, lat], [lng, lat], ...]
       },
     },
-    conflictStatus: {
-      type: String,
-      enum: ["CLEAR", "CONFLICT_DETECTED", "RESOLVED"],
-      default: "CLEAR",
+    batteryPercentageUsed: {
+      type: Number,
+      required: true,
+      min: 0,
+      max: 100,
+    },
+    estimatedFlightTime: {
+      type: Number,
+      required: true,
+      min: 0,
     },
     notes: {
       type: String,
@@ -95,11 +102,22 @@ const FlightPlanSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// Validators
+FlightPlanSchema.path("batteryPercentageUsed").validate(
+  (value) => Number.isFinite(value) && value >= 0 && value <= 100,
+  "batteryPercentageUsed must be a number between 0 and 100.",
+);
+
+FlightPlanSchema.path("estimatedFlightTime").validate(
+  (value) => Number.isFinite(value) && value > 0,
+  "estimatedFlightTime must be a positive number.",
+);
+
 // Indexes
 FlightPlanSchema.index({ routeGeometry: "2dsphere" });
-FlightPlanSchema.index({ status: 1, createdAt: -1 });
-FlightPlanSchema.index({ pilot: 1, status: 1 });
-FlightPlanSchema.index({ drone: 1, status: 1 });
+FlightPlanSchema.index({ createdAt: -1 });
+FlightPlanSchema.index({ pilot: 1 });
+FlightPlanSchema.index({ drone: 1 });
 
 // Pre-save: auto-generate routeGeometry from waypoints
 FlightPlanSchema.pre("save", function () {
