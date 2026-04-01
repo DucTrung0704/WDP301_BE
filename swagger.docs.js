@@ -872,6 +872,46 @@
  *           description: Thời gian zone hết hiệu lực (nếu không có thì vĩnh viễn)
  *           example: "2027-01-01T00:00:00Z"
  *
+ *     UpdateZoneRequest:
+ *       type: object
+ *       description: Chỉ gửi các field muốn cập nhật. Không hỗ trợ cập nhật trực tiếp field status.
+ *       properties:
+ *         name:
+ *           type: string
+ *           description: Tên mới của zone
+ *           example: "Updated Zone Name"
+ *         description:
+ *           type: string
+ *           description: Mô tả mới
+ *           example: "Updated description"
+ *         type:
+ *           type: string
+ *           enum: [no_fly, restricted]
+ *           description: Loại zone
+ *           example: "restricted"
+ *         geometry:
+ *           $ref: '#/components/schemas/GeoJSONPolygon'
+ *         minAltitude:
+ *           type: number
+ *           minimum: 0
+ *           description: Độ cao tối thiểu (meters)
+ *           example: 0
+ *         maxAltitude:
+ *           type: number
+ *           minimum: 0
+ *           description: Độ cao tối đa (meters), phải >= minAltitude
+ *           example: 5000
+ *         effectiveFrom:
+ *           type: string
+ *           format: date-time
+ *           description: Thời gian bắt đầu hiệu lực
+ *           example: "2026-02-01T00:00:00Z"
+ *         effectiveTo:
+ *           type: string
+ *           format: date-time
+ *           description: Thời gian hết hiệu lực, phải >= effectiveFrom khi được cung cấp
+ *           example: "2027-02-01T00:00:00Z"
+ *
  *     ZoneResponse:
  *       type: object
  *       properties:
@@ -1322,7 +1362,7 @@
  *       Cập nhật zone với các field được cung cấp. Chỉ cần gửi các field muốn thay đổi.
  *       **Lưu ý:**
  *       - Không thể edit zone đã bị archived
- *       - Không thể đổi status thành 'archived' qua endpoint này (sử dụng DELETE để archive)
+ *       - Không hỗ trợ cập nhật field status qua endpoint này
  *       - Nếu thay đổi geometry, validation polygon (closed, không tự cắt) sẽ được thực hiện
  *     tags: [Zones]
  *     security:
@@ -1340,53 +1380,12 @@
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *                 description: Tên mới của zone
- *                 example: "Updated Zone Name"
- *               description:
- *                 type: string
- *                 description: Mô tả mới
- *                 example: "Updated description"
- *               type:
- *                 type: string
- *                 enum: [no_fly, restricted]
- *                 description: Loại zone
- *                 example: "restricted"
- *               geometry:
- *                 $ref: '#/components/schemas/GeoJSONPolygon'
- *               minAltitude:
- *                 type: number
- *                 minimum: 0
- *                 description: Độ cao tối thiểu (meters)
- *                 example: 0
- *               maxAltitude:
- *                 type: number
- *                 minimum: 0
- *                 description: Độ cao tối đa (meters)
- *                 example: 5000
- *               effectiveFrom:
- *                 type: string
- *                 format: date-time
- *                 description: Thời gian bắt đầu hiệu lực
- *                 example: "2026-02-01T00:00:00Z"
- *               effectiveTo:
- *                 type: string
- *                 format: date-time
- *                 description: Thời gian hết hiệu lực
- *                 example: "2027-02-01T00:00:00Z"
- *               status:
- *                 type: string
- *                 enum: [active, inactive]
- *                 description: "Trạng thái zone (không thể set thành 'archived')"
- *                 example: "active"
+ *             $ref: '#/components/schemas/UpdateZoneRequest'
  *           example:
  *             name: "Updated Airport Zone"
  *             description: "Updated no-fly zone description"
  *             maxAltitude: 5000
- *             status: "active"
+ *             effectiveTo: "2027-02-01T00:00:00Z"
  *     responses:
  *       200:
  *         description: Cập nhật thành công
@@ -1413,6 +1412,9 @@
  *               altitudeError:
  *                 value:
  *                   message: "maxAltitude must be greater than or equal to minAltitude."
+ *               effectiveTimeError:
+ *                 value:
+ *                   message: "effectiveTo must be greater than or equal to effectiveFrom."
  *       401:
  *         description: Không được xác thực
  *         content:
