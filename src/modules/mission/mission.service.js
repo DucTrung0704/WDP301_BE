@@ -250,14 +250,17 @@ async function updateMissionPlan(
 ) {
     const mission = await getMissionForUser(missionId, userId, role);
 
+    // Populate with all fields needed for trajectory mapping + drone overlap check
     const missionPlan = await MissionPlan.findOne({
         _id: missionPlanId,
         mission: mission._id,
-    }).populate("flightPlan", "drone pilot status");
+    }).populate("flightPlan");
 
     if (!missionPlan) {
         throw new Error("Mission plan not found");
     }
+
+    const timeChanged = data.plannedStart !== undefined || data.plannedEnd !== undefined;
 
     const plannedStart =
         data.plannedStart ?
@@ -285,6 +288,29 @@ async function updateMissionPlan(
         plannedEnd,
         excludeMissionPlanId: missionPlan._id,
     });
+    // Re-run conflict detection if the scheduled time window changed
+    if (timeChanged) {
+        const checks = await runMissionAddChecks({
+            missionId: mission._id,
+            flightPlan: missionPlan.flightPlan,
+            plannedStart,
+            plannedEnd,
+            excludeMissionPlanId: missionPlan._id,
+        });
+
+        if (checks.hasBlockingIssues) {
+            const err = createValidationError(
+                "Không thể cập nhật thời gian vì phát hiện conflict/zone violation trong khung giờ mới.",
+            );
+            err.details = {
+                notification: "Conflict phát hiện khi thay đổi thời gian. Vui lòng chọn khung giờ khác.",
+                pairwiseConflicts: checks.pairwiseConflicts,
+                segmentationConflicts: checks.segmentationConflicts,
+                zoneViolations: checks.zoneViolations,
+            };
+            throw err;
+        }
+    }
 
     missionPlan.plannedStart = plannedStart;
     missionPlan.plannedEnd = plannedEnd;
@@ -407,29 +433,70 @@ function mergeSegmentationWithoutPairwiseDuplicates(
     });
 }
 
-async function runMissionAddChecks({ missionId, flightPlan, plannedStart, plannedEnd }) {
-    const existingMissionPlans = await MissionPlan.find({
-        mission: missionId,
-        status: "SCHEDULED",
-    }).populate("flightPlan");
+/**
+ * Build trajectories for all MissionPlans within a mission that are SCHEDULED,
+ * optionally excluding a specific MissionPlan (used during update).
+ */
+async function getInternalTrajectories(missionId, excludeMissionPlanId = null) {
+    const query = { mission: missionId, status: "SCHEDULED" };
+    if (excludeMissionPlanId) {
+        query._id = { $ne: excludeMissionPlanId };
+    }
+    const missionPlans = await MissionPlan.find(query).populate("flightPlan");
+    return missionPlans.map(mapMissionPlanToScheduledTrajectory);
+}
 
+/**
+ * Build trajectories for all MissionPlans SCHEDULED in OTHER missions
+ * whose time window overlaps [plannedStart, plannedEnd].
+ * Optionally excludes a specific mission (current mission) from the query.
+ */
+async function getCrossMissionTrajectories(excludeMissionId, plannedStart, plannedEnd) {
+    const crossPlans = await MissionPlan.find({
+        mission: { $ne: excludeMissionId },
+        status: "SCHEDULED",
+        plannedStart: { $lt: plannedEnd },
+        plannedEnd: { $gt: plannedStart },
+    }).populate("flightPlan");
+    return crossPlans.map(mapMissionPlanToScheduledTrajectory);
+}
+
+/**
+ * Run all pre-flight conflict checks for a candidate MissionPlan being added or updated.
+ * Checks against:
+ *   1. Other SCHEDULED plans within the SAME mission (internal)
+ *   2. All SCHEDULED plans from OTHER missions whose time overlaps (cross-mission)
+ *
+ * @param {Object} options
+ * @param {ObjectId} options.missionId           - The mission being modified
+ * @param {Object}  options.flightPlan           - Populated FlightPlan document
+ * @param {Date}    options.plannedStart          - Scheduled start time
+ * @param {Date}    options.plannedEnd            - Scheduled end time
+ * @param {ObjectId} [options.excludeMissionPlanId] - MissionPlan to exclude (during update)
+ */
+async function runMissionAddChecks({ missionId, flightPlan, plannedStart, plannedEnd, excludeMissionPlanId = null }) {
     const candidateMissionPlan = {
         _id: `candidate_${flightPlan._id.toString()}`,
         flightPlan,
         plannedStart,
         plannedEnd,
     };
-
     const candidateTrajectory = mapMissionPlanToScheduledTrajectory(candidateMissionPlan);
-    const existingTrajectories = existingMissionPlans.map(mapMissionPlanToScheduledTrajectory);
+
+    // Gather all competing trajectories: internal (same mission) + cross-mission
+    const [internalTrajectories, crossTrajectories] = await Promise.all([
+        getInternalTrajectories(missionId, excludeMissionPlanId),
+        getCrossMissionTrajectories(missionId, plannedStart, plannedEnd),
+    ]);
+    const allExistingTrajectories = [...internalTrajectories, ...crossTrajectories];
 
     const pairwiseConflicts = deduplicateConflicts(
-        pairwiseConflictCheck(candidateTrajectory, existingTrajectories),
+        pairwiseConflictCheck(candidateTrajectory, allExistingTrajectories),
     );
 
     const segmentationConflicts = mergeSegmentationWithoutPairwiseDuplicates(
         pairwiseConflicts,
-        segmentationConflictCheck(candidateTrajectory, existingTrajectories),
+        segmentationConflictCheck(candidateTrajectory, allExistingTrajectories),
     );
 
     const zoneViolations = await checkFlightPlanZoneViolations(candidateTrajectory);
@@ -445,9 +512,19 @@ async function runMissionAddChecks({ missionId, flightPlan, plannedStart, planne
     };
 }
 
-async function runMissionStartChecks(missionPlans) {
+/**
+ * Final conflict re-check when activating a mission (DRAFT → ACTIVE).
+ * Checks:
+ *   1. Internal conflicts among all plans within this mission
+ *   2. Cross-mission conflicts with all other SCHEDULED plans whose time overlaps
+ *
+ * @param {Array}    missionPlans - All SCHEDULED MissionPlan documents (populated) for this mission
+ * @param {ObjectId} missionId    - The mission being started (to exclude from cross-mission query)
+ */
+async function runMissionStartChecks(missionPlans, missionId) {
     const scheduledTrajectories = missionPlans.map(mapMissionPlanToScheduledTrajectory);
 
+    // ── Internal check (plans within the same mission conflict with each other) ──
     let pairwiseConflicts = [];
     let segmentationConflicts = [];
 
@@ -465,6 +542,37 @@ async function runMissionStartChecks(missionPlans) {
         segmentationConflicts,
     );
 
+    // ── Cross-mission check (each plan against other missions) ──
+    const crossMissionChecks = await Promise.all(
+        scheduledTrajectories.map(async (trajectory) => {
+            const crossTrajectories = await getCrossMissionTrajectories(
+                missionId,
+                trajectory.plannedStart,
+                trajectory.plannedEnd,
+            );
+            if (crossTrajectories.length === 0) return { pairwise: [], seg: [] };
+
+            const crossPairwise = pairwiseConflictCheck(trajectory, crossTrajectories);
+            const crossSeg = mergeSegmentationWithoutPairwiseDuplicates(
+                crossPairwise,
+                segmentationConflictCheck(trajectory, crossTrajectories),
+            );
+            return { pairwise: crossPairwise, seg: crossSeg };
+        }),
+    );
+
+    for (const { pairwise, seg } of crossMissionChecks) {
+        pairwiseConflicts.push(...pairwise);
+        segmentationConflicts.push(...seg);
+    }
+
+    pairwiseConflicts = deduplicateConflicts(pairwiseConflicts);
+    segmentationConflicts = mergeSegmentationWithoutPairwiseDuplicates(
+        pairwiseConflicts,
+        segmentationConflicts,
+    );
+
+    // ── Zone violations (each trajectory vs active zones) ──
     const zoneViolationsNested = await Promise.all(
         scheduledTrajectories.map((trajectory) =>
             checkFlightPlanZoneViolations({
@@ -473,7 +581,6 @@ async function runMissionStartChecks(missionPlans) {
             }),
         ),
     );
-
     const zoneViolations = zoneViolationsNested.flat();
 
     return {
@@ -504,7 +611,7 @@ async function startMission(missionId, userId, role) {
         "Mission must contain at least one scheduled plan before start.",
     );
 
-    const checks = await runMissionStartChecks(missionPlans);
+    const checks = await runMissionStartChecks(missionPlans, mission._id);
 
     if (checks.hasBlockingIssues) {
         const err = createValidationError(
