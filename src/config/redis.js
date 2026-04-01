@@ -414,7 +414,9 @@ const streamOps = {
         try {
             await ensureStreamClientReady();
             const streamKey = REDIS_KEYS.telemetryStream;
-            await redisClientAsync.xTrim(streamKey, "MAXLEN", "~", maxLen);
+            await redisClientAsync.xTrim(streamKey, "MAXLEN", maxLen, {
+                strategyModifier: "~",
+            });
         } catch (err) {
             console.error("Stream trim error:", err.message);
         }
