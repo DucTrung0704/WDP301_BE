@@ -1782,7 +1782,7 @@
  *         description: Flight plan not found
  *
  *   delete:
- *     summary: Xoá/Xóa (soft-delete) kế hoạch bay (ACTIVE → INACTIVE)
+ *     summary: "Xoá/Xóa (soft-delete) kế hoạch bay (ACTIVE → INACTIVE)"
  *     description: Thực hiện soft delete bằng cách chuyển status từ ACTIVE sang INACTIVE. Plan bị archived sẽ không được sử dụng trong mission.
  *     security:
  *       - bearerAuth: []
@@ -1817,7 +1817,7 @@
  * @swagger
  * /api/flight-plans/{id}/submit:
  *   post:
- *     summary: Archive kế hoạch bay (soft-delete: ACTIVE → INACTIVE)
+ *     summary: "Archive kế hoạch bay (soft-delete: ACTIVE → INACTIVE)"
  *     description: |
  *       Archive flight plan bằng cách chuyển status từ ACTIVE sang INACTIVE.
  *       Endpoint này được giữ nguyên tên /submit để backward compatibility, nhưng thực hiện hành động archive.
@@ -1861,7 +1861,7 @@
  * @swagger
  * /api/flight-plans/{id}/cancel:
  *   post:
- *     summary: Hủy/Archive kế hoạch bay (ACTIVE → INACTIVE)
+ *     summary: "Hủy/Archive kế hoạch bay (ACTIVE → INACTIVE)"
  *     description: |
  *       Archive flight plan bằng cách chuyển status từ ACTIVE sang INACTIVE.
  *       Endpoint này tương đương với /submit và /delete, giữ nguyên tên để backward compatibility.
