@@ -524,10 +524,10 @@ const options = {
         },
         FlightPlanBriefResponse: {
           type: "object",
-          description: "FlightPlan as returned when nested inside MissionPlan (drone/pilot are plain IDs, not populated)",
+          description: "FlightPlan as returned when nested inside MissionPlan (drone is populated, pilot remains an ObjectId string)",
           properties: {
             _id: { type: "string", example: "507f1f77bcf86cd799439011" },
-            drone: { type: "string", example: "507f1f77bcf86cd799439011", description: "ObjectId of the drone" },
+            drone: { $ref: "#/components/schemas/Drone" },
             pilot: { type: "string", example: "507f1f77bcf86cd799439011", description: "ObjectId of the pilot" },
             status: {
               type: "string",
