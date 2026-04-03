@@ -16,8 +16,8 @@ const { cacheOps } = require("../../config/redis");
 
 // ── Config ──────────────────────────────────────────────────────────────────
 const MOCK_COUNT      = parseInt(process.env.NEARBY_MOCK_COUNT)      || 5;
-const BASE_LAT        = parseFloat(process.env.MOCK_DRONE_BASE_LAT)  || 10.762622;
-const BASE_LNG        = parseFloat(process.env.MOCK_DRONE_BASE_LNG)  || 106.660172;
+const BASE_LAT        = parseFloat(process.env.MOCK_DRONE_BASE_LAT)  || 10.717222;
+const BASE_LNG        = parseFloat(process.env.MOCK_DRONE_BASE_LNG)  || 106.643371;
 const SPREAD_M        = parseFloat(process.env.MOCK_DRONE_SPREAD_M)  || 2000;
 const TICK_MS         = parseInt(process.env.NEARBY_PUSH_INTERVAL_MS) || 1000;
 const MOCK_SPEED_MS   = 5;    // m/s — typical drone cruise speed

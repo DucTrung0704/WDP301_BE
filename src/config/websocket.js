@@ -8,7 +8,7 @@ const FlightSession = require("../modules/flightSession/flightSession.model");
 const FlightPlan = require("../modules/flightPlan/flightPlan.model");
 const { getNearbyDrones } = require("../modules/nearby/nearby.service");
 
-const NEARBY_RADIUS_M = parseInt(process.env.NEARBY_RADIUS_M) || 1000;
+const NEARBY_RADIUS_M = parseInt(process.env.NEARBY_RADIUS_M) || 10000;
 const NEARBY_PUSH_MS = parseInt(process.env.NEARBY_PUSH_INTERVAL_MS) || 1000;
 
 let io; // Hold the socket.io server instance
@@ -266,7 +266,8 @@ function init(httpServer) {
     // Server pushes: nearby_drones every NEARBY_PUSH_MS
     socket.on("subscribe_nearby", async (msg) => {
       try {
-        const { sessionId, lat, lng } = msg || {};
+        // Hứng thêm droneId từ client gửi lên (nếu có)
+        const { sessionId, lat, lng, droneId: clientDroneId } = msg || {};
 
         if (!sessionId) {
           socket.emit("error", { message: "subscribe_nearby: sessionId is required" });
@@ -279,24 +280,24 @@ function init(httpServer) {
           return;
         }
 
-        if (session.pilot.toString() !== socket.user.id.toString()) {
-          socket.emit("error", { message: "Forbidden: not your session" });
-          return;
+        // 👉 ĐÃ FIX SCOPE: Khai báo hwDroneId ở ngay mức ngoài cùng của block
+        let hwDroneId = clientDroneId;
+        if (!hwDroneId) {
+          if (session.drone && session.drone.droneId) {
+            hwDroneId = session.drone.droneId.toString();
+          } else {
+            hwDroneId = session.drone._id?.toString() || session.drone.toString();
+          }
         }
 
-        // Resolve centre coordinates
         let centreLat = lat;
         let centreLng = lng;
 
         if (centreLat == null || centreLng == null) {
-          // Fall back to latest cached drone position
-          const droneIdStr =
-            session.drone._id?.toString() || session.drone.toString();
-          const cached = await cacheOps.getDroneLocation(droneIdStr);
+          const cached = await cacheOps.getDroneLocation(hwDroneId);
           if (!cached) {
             socket.emit("error", {
-              message:
-                "subscribe_nearby: lat/lng required — no telemetry cached yet",
+              message: "subscribe_nearby: lat/lng required — no telemetry cached yet",
             });
             return;
           }
@@ -304,16 +305,12 @@ function init(httpServer) {
           centreLng = cached.lng;
         }
 
-        const droneId =
-          session.drone._id?.toString() || session.drone.toString();
-
-        // Stop any existing nearby interval first
         clearInterval(socket.nearbyInterval);
 
         const pushNearby = async () => {
           try {
-            // Use latest cached position when available (drone is moving)
-            const latest = await cacheOps.getDroneLocation(droneId);
+            // Lúc này hàm ở trong đã nhận diện được hwDroneId ở ngoài
+            const latest = await cacheOps.getDroneLocation(hwDroneId);
             const queryLat = latest ? latest.lat : centreLat;
             const queryLng = latest ? latest.lng : centreLng;
 
@@ -321,7 +318,7 @@ function init(httpServer) {
               queryLat,
               queryLng,
               NEARBY_RADIUS_M,
-              [droneId],
+              [hwDroneId], // Dùng ID này để lọc
             );
 
             socket.emit("nearby_drones", {
@@ -334,7 +331,6 @@ function init(httpServer) {
           }
         };
 
-        // Push immediately, then on interval
         await pushNearby();
         socket.nearbyInterval = setInterval(pushNearby, NEARBY_PUSH_MS);
 
