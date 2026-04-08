@@ -332,10 +332,17 @@ class FlightPlanFollower {
         reject(new Error(`Socket connect failed: ${err.message}`)),
       );
 
-      this._socket.on('alert', (alert) => {
+      this._socket.on('alert', (payload) => {
+        const alert = payload?.alert && typeof payload.alert === 'object'
+          ? payload.alert
+          : payload;
+
         this.alertsReceived.push(alert);
-        const icon = alert.severity === 'CRITICAL' ? '🚨' : alert.severity === 'HIGH' ? '⚠️ ' : 'ℹ️ ';
-        console.log(`  ${icon} [${this._tag()}] ALERT ${alert.type}: ${alert.message}`);
+        const severity = alert?.severity || 'MEDIUM';
+        const alertType = alert?.type || 'UNIDENTIFIED';
+        const alertMessage = alert?.message || 'No alert message';
+        const icon = severity === 'CRITICAL' ? '🚨' : severity === 'HIGH' ? '⚠️ ' : 'ℹ️ ';
+        console.log(`  ${icon} [${this._tag()}] ALERT ${alertType}: ${alertMessage}`);
       });
 
       this._socket.on('disconnect', () => {

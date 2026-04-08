@@ -101,13 +101,14 @@ socket.on("watching", (data) => {
 });
 
 socket.on("alert", (msg) => {
+  const alert = msg?.alert && typeof msg.alert === "object" ? msg.alert : msg;
   const timestamp = new Date().toISOString();
   console.log(`\n🚨 [${timestamp}] ALERT RECEIVED:`);
-  console.log(`   Type: ${msg.type}`);
-  console.log(`   Severity: ${msg.severity}`);
-  console.log(`   Message: ${msg.message}`);
-  if (msg.data) {
-    console.log(`   Data:`, JSON.stringify(msg.data, null, 4));
+  console.log(`   Type: ${alert.type}`);
+  console.log(`   Severity: ${alert.severity}`);
+  console.log(`   Message: ${alert.message}`);
+  if (alert.data) {
+    console.log(`   Data:`, JSON.stringify(alert.data, null, 4));
   }
 });
 
