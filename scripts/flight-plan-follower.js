@@ -94,6 +94,7 @@ class FlightPlanFollower {
     this.batteryLevel = 100;
     this.tickCount = 0;
     this.alertsReceived = [];
+    this._sessionClosed = false;
 
     /** @private */
     this._socket = null;
@@ -291,8 +292,28 @@ class FlightPlanFollower {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: res.statusText }));
-      console.warn(`  ⚠️  [${this._tag()}] endSession warning: ${err.message || res.statusText}`);
+      throw new Error(`endSession ${res.status}: ${err.message || res.statusText}`);
     }
+
+    this._sessionClosed = true;
+  }
+
+  /** @private */
+  async _abortSession(baseUrl, token, reason = 'simulation aborted') {
+    if (!this.sessionId || this._sessionClosed) return;
+
+    const res = await fetch(`${baseUrl}/api/flight-sessions/${this.sessionId}/abort`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ reason }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: res.statusText }));
+      throw new Error(`abortSession ${res.status}: ${err.message || res.statusText}`);
+    }
+
+    this._sessionClosed = true;
   }
 
   /** @private */
@@ -428,6 +449,7 @@ class FlightPlanFollower {
   async fly(baseUrl, wsUrl, token, runControl = null) {
     try {
       this._runControl = runControl;
+      this._sessionClosed = false;
       this.status = 'CONNECTING';
       await this._connectSocket(wsUrl, token);
 
@@ -447,6 +469,15 @@ class FlightPlanFollower {
     } catch (err) {
       this.status = 'FAILED';
       console.error(`  ❌ [${this._tag()}] ${err.message}`);
+
+      if (this.sessionId && !this._sessionClosed) {
+        try {
+          await this._abortSession(baseUrl, token, err.message);
+          console.log(`  🧹 [${this._tag()}] Session aborted after failure`);
+        } catch (cleanupErr) {
+          console.error(`  ❌ [${this._tag()}] Cleanup failed: ${cleanupErr.message}`);
+        }
+      }
     } finally {
       if (this._socket) {
         this._socket.disconnect();
