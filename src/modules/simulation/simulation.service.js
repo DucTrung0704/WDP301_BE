@@ -16,6 +16,58 @@ function makeError(message, statusCode) {
   return err;
 }
 
+async function forceCleanupRunSessions(run) {
+  const missionPlans = await MissionPlan.find({ mission: run.missionId }).populate({
+    path: "flightPlan",
+    select: "_id drone",
+  });
+
+  const flightPlanIds = missionPlans
+    .map((plan) => plan.flightPlan?._id)
+    .filter(Boolean);
+
+  const droneIds = missionPlans
+    .map((plan) => plan.flightPlan?.drone)
+    .filter(Boolean);
+
+  if (flightPlanIds.length === 0 && droneIds.length === 0) {
+    return;
+  }
+
+  const activeSessions = await FlightSession.find({
+    pilot: run.userId,
+    status: { $in: ["STARTING", "IN_PROGRESS"] },
+    $or: [
+      ...(flightPlanIds.length > 0 ? [{ flightPlan: { $in: flightPlanIds } }] : []),
+      ...(droneIds.length > 0 ? [{ drone: { $in: droneIds } }] : []),
+    ],
+  }).select("_id notes");
+
+  if (activeSessions.length === 0) {
+    return;
+  }
+
+  const now = new Date();
+  const note = `Auto-aborted by simulation stop for run ${run.runId}.`;
+
+  await Promise.all(
+    activeSessions.map((session) =>
+      FlightSession.updateOne(
+        { _id: session._id },
+        {
+          status: "ABORTED",
+          actualEnd: now,
+          notes: [session.notes, note].filter(Boolean).join("\n"),
+        },
+      ),
+    ),
+  );
+
+  if (droneIds.length > 0) {
+    await Drone.updateMany({ _id: { $in: droneIds } }, { status: "IDLE" });
+  }
+}
+
 async function precheckMissionSimulation(missionId) {
   const missionPlans = await MissionPlan.find({
     mission: missionId,
@@ -78,10 +130,42 @@ async function precheckMissionSimulation(missionId) {
   const activeSessions = await FlightSession.find({
     drone: { $in: droneIds },
     status: { $in: ["STARTING", "IN_PROGRESS"] },
-  }).select("drone status flightPlan actualStart");
+  }).select("drone status flightPlan actualStart notes");
 
-  if (activeSessions.length > 0) {
-    const sessionByDrone = new Map(activeSessions.map((session) => [session.drone.toString(), session]));
+  const staleSessions = activeSessions.filter((session) => {
+    const drone = droneMap.get(session.drone.toString());
+    return drone && drone.status === "IDLE";
+  });
+
+  if (staleSessions.length > 0) {
+    await Promise.all(
+      staleSessions.map((session) =>
+        FlightSession.updateOne(
+          { _id: session._id },
+          {
+            status: "ABORTED",
+            actualEnd: new Date(),
+            notes: [
+              session.notes,
+              "Auto-aborted by simulation pre-check because drone status is IDLE while session was active.",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          },
+        ),
+      ),
+    );
+  }
+
+  const blockingActiveSessions = activeSessions.filter((session) => {
+    const drone = droneMap.get(session.drone.toString());
+    return !drone || drone.status !== "IDLE";
+  });
+
+  if (blockingActiveSessions.length > 0) {
+    const sessionByDrone = new Map(
+      blockingActiveSessions.map((session) => [session.drone.toString(), session]),
+    );
 
     missionPlans.forEach((plan) => {
       const droneId = plan.flightPlan.drone.toString();
@@ -211,6 +295,7 @@ function toPublicRun(run) {
     endedAt: run.endedAt,
     exitCode: run.exitCode,
     signal: run.signal,
+    cleanup: run.cleanup,
     pid: run.pid,
     command: redactTokenInCommand(run.command),
     options: run.options,
@@ -272,6 +357,7 @@ async function startMissionSimulation({ missionId, token, actor, options }) {
     endedAt: null,
     exitCode: null,
     signal: null,
+    cleanup: null,
     pid: child.pid,
     command: `${process.execPath} ${args.join(" ")}`,
     options: normalizedOptions,
@@ -296,6 +382,14 @@ async function startMissionSimulation({ missionId, token, actor, options }) {
 
     if (run.status === "STOPPING") {
       run.status = "STOPPED";
+      forceCleanupRunSessions(run)
+        .then(() => {
+          run.cleanup = "completed";
+        })
+        .catch((err) => {
+          run.cleanup = "failed";
+          appendLog(run, "stderr", `Post-stop session cleanup failed: ${err.message}`);
+        });
       return;
     }
 
@@ -315,12 +409,14 @@ function stopSimulation(runId, actor) {
   }
 
   run.status = "STOPPING";
+  run.cleanup = "scheduled";
 
   try {
     run.child.kill("SIGTERM");
   } catch (err) {
     appendLog(run, "stderr", `Failed to stop process: ${err.message}`);
     run.status = "FAILED";
+    run.cleanup = "failed";
     run.endedAt = new Date().toISOString();
   }
 

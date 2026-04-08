@@ -70,8 +70,10 @@ exports.stopSimulation = async (req, res) => {
   try {
     setSimulationResponseHeaders(res);
     const run = simulationService.stopSimulation(req.params.runId, req.user);
+    const cleanup = run.cleanup || (run.status === "STOPPING" ? "scheduled" : null);
     return res.json({
       message: run.status === "STOPPING" ? "Stopping simulation" : "Simulation is not running",
+      cleanup,
       run,
     });
   } catch (err) {
