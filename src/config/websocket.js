@@ -81,9 +81,15 @@ function init(httpServer) {
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const socketUserId = decoded.userId || decoded.id || decoded.sub;
+
+      if (!socketUserId) {
+        return next(new Error("Authentication error: Token missing user identifier"));
+      }
+
       // Attach user info to the socket object
       socket.user = {
-        id: decoded.id,
+        id: socketUserId,
         role: decoded.role,
       };
       next();
