@@ -779,9 +779,14 @@ const options = {
           properties: {
             mode: {
               type: "string",
-              enum: ["normal", "deviation", "battery-drop"],
+              enum: ["normal", "deviation", "battery-drop", "continuous"],
               example: "normal",
-              description: "Simulation mode for fleet mission execution",
+              description: "Simulation mode for fleet mission execution. Use continuous mode or set continuous=true to keep running until stop",
+            },
+            continuous: {
+              type: "boolean",
+              example: true,
+              description: "When true, simulator loops mission continuously until /stop is called",
             },
             timeScale: {
               type: "number",

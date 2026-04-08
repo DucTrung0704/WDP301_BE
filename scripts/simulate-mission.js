@@ -11,6 +11,7 @@
  *     --missionId=<objectId> \
  *     --token=<jwt> \
  *     [--mode=normal|deviation|battery-drop] \
+ *     [--continuous=1]         (loop until stopped)
  *     [--timeScale=10]           (10× speed, default 1)
  *     [--tickMs=1000]            (telemetry interval ms, default 1000)
  *     [--deviationDroneIndex=0]  (which drone gets deviation mode)
@@ -48,14 +49,36 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 const WS_URL = process.env.WS_URL || BASE_URL;
 const TOKEN = getArg('token') || process.env.SIMULATOR_TOKEN;
 const MISSION_ID = getArg('missionId');
-const MODE = getArg('mode') || 'normal';
+const RAW_MODE = getArg('mode') || 'normal';
+const CONTINUOUS = Boolean(getArg('continuous')) || RAW_MODE === 'continuous';
+const MODE = RAW_MODE === 'continuous' ? 'normal' : RAW_MODE;
 const TIME_SCALE = parseFloat(getArg('timeScale') ?? '1');
 const TICK_MS = parseInt(getArg('tickMs') ?? '1000', 10);
 const DEV_INDEX = parseInt(getArg('deviationDroneIndex') ?? '0', 10);
 const SKIP_CHECK = Boolean(getArg('skipSafetyCheck'));
 
+const runControl = {
+  stopRequested: false,
+  stopReason: null,
+};
+
+function requestStop(reason) {
+  if (runControl.stopRequested) return;
+  runControl.stopRequested = true;
+  runControl.stopReason = reason;
+  console.log(`\n🛑  Stop requested (${reason}) — finishing current loop and landing...`);
+}
+
+process.on('SIGTERM', () => requestStop('SIGTERM'));
+process.on('SIGINT', () => requestStop('SIGINT'));
+
 // Pairwise check resolution — matches TIME_STEP in conflictConfig.js
 const CHECK_STEP_MS = 30_000; // 30 seconds
+
+function toIpv4Loopback(urlValue) {
+  if (typeof urlValue !== 'string' || !urlValue.includes('://localhost')) return null;
+  return urlValue.replace('://localhost', '://127.0.0.1');
+}
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 
@@ -69,7 +92,25 @@ async function apiRequest(method, path, body) {
   };
   if (body) opts.body = JSON.stringify(body);
 
-  const res = await fetch(`${BASE_URL}${path}`, opts);
+  const primaryUrl = `${BASE_URL}${path}`;
+  let res;
+
+  try {
+    res = await fetch(primaryUrl, opts);
+  } catch (err) {
+    const fallbackBase = toIpv4Loopback(BASE_URL);
+    if (!fallbackBase) throw err;
+
+    const fallbackUrl = `${fallbackBase}${path}`;
+    console.warn(`⚠️   API connect failed at ${BASE_URL}, retrying with ${fallbackBase}...`);
+    try {
+      res = await fetch(fallbackUrl, opts);
+    } catch (retryErr) {
+      const rootCause = retryErr?.cause?.message || err?.cause?.message || retryErr.message || err.message;
+      throw new Error(`Network error calling ${method} ${path}: ${rootCause}`);
+    }
+  }
+
   const data = await res.json().catch(() => ({ message: res.statusText }));
 
   if (!res.ok) {
@@ -246,6 +287,7 @@ function buildFollowers(missionPlans, sharedPositions) {
       deviationOffset: 200,
       deviationFrom: 0.3,
       deviationTo: 0.6,
+      continuous: CONTINUOUS,
       sharedPositions,
     }));
   }
@@ -275,10 +317,11 @@ async function scheduleAndFly(followers) {
 
     return new Promise((resolve) => setTimeout(resolve, realDelayMs))
       .then(() => {
+        if (runControl.stopRequested) return null;
         if (realDelayMs > 0) {
           console.log(`  🕐 [${follower.droneId.slice(-6)}] Delayed start after ${Math.round(realDelayMs / 1000)}s`);
         }
-        return follower.fly(BASE_URL, WS_URL, TOKEN);
+        return follower.fly(BASE_URL, WS_URL, TOKEN, runControl);
       });
   });
 
@@ -306,6 +349,10 @@ function printSummary(followers, elapsedMs) {
   console.log('══════════════════════════════════════════════════════\n');
 }
 
+function getFailedFollowers(followers) {
+  return followers.filter((f) => f.status === 'FAILED');
+}
+
 // ── Validation ────────────────────────────────────────────────────────────────
 
 function validateArgs() {
@@ -326,7 +373,7 @@ async function main() {
   if (process.argv.length < 3) {
     console.log(
       'Usage: node scripts/simulate-mission.js ' +
-      '--missionId=<id> --token=<jwt> [--mode=normal] [--timeScale=1] [--tickMs=1000]',
+      '--missionId=<id> --token=<jwt> [--mode=normal|deviation|battery-drop|continuous] [--continuous=1] [--timeScale=1] [--tickMs=1000]',
     );
     process.exit(0);
   }
@@ -339,7 +386,7 @@ async function main() {
 
   console.log('');
   console.log('🚁  MISSION FLEET SIMULATOR');
-  console.log(`    mode=${MODE}  timeScale=${TIME_SCALE}×  tick=${TICK_MS}ms`);
+  console.log(`    mode=${MODE}  continuous=${CONTINUOUS ? 'on' : 'off'}  timeScale=${TIME_SCALE}×  tick=${TICK_MS}ms`);
   console.log(`    base=${BASE_URL}  ws=${WS_URL}`);
   console.log('');
 
@@ -416,10 +463,22 @@ async function main() {
   const elapsed = Date.now() - t0;
 
   printSummary(followers, elapsed);
+  if (runControl.stopRequested) {
+    console.log(`🛑  Simulation stopped by signal (${runControl.stopReason || 'unknown'})`);
+    return;
+  }
+
+  const failedFollowers = getFailedFollowers(followers);
+  if (failedFollowers.length > 0) {
+    throw new Error(
+      `Simulation failed for ${failedFollowers.length} drone(s): ${failedFollowers.map((f) => f.droneId).join(', ')}`,
+    );
+  }
 }
 
 main().catch((err) => {
-  console.error('\n❌  Fatal error:', err.message);
+  const causeMessage = err?.cause?.message;
+  console.error('\n❌  Fatal error:', causeMessage ? `${err.message} (cause: ${causeMessage})` : err.message);
   if (process.env.VERBOSE) console.error(err.stack);
   process.exit(1);
 });

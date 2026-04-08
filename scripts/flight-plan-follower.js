@@ -70,6 +70,7 @@ class FlightPlanFollower {
    * @param {number}  [opts.deviationOffset=200] - Lateral offset in metres (mode=deviation)
    * @param {number}  [opts.deviationFrom=0.3]   - Route fraction where deviation starts
    * @param {number}  [opts.deviationTo=0.6]     - Route fraction where deviation ends
+  * @param {boolean} [opts.continuous=false]    - Keep looping route until external stop is requested
    * @param {Map}     [opts.sharedPositions]  - Shared Map(droneId → {lat,lng,alt,speed,heading})
    */
   constructor(opts) {
@@ -84,6 +85,7 @@ class FlightPlanFollower {
     this.deviationOffset = opts.deviationOffset ?? 200;
     this.deviationFrom = opts.deviationFrom ?? 0.3;
     this.deviationTo = opts.deviationTo ?? 0.6;
+    this.continuous = opts.continuous === true;
     this.sharedPositions = opts.sharedPositions || new Map();
 
     // Public state (readable by orchestrator)
@@ -336,16 +338,30 @@ class FlightPlanFollower {
     const startMs = this.plannedStart.getTime();
     const totalDurMs = Math.max(1000, this.plannedEnd.getTime() - startMs);
     let elapsedSimMs = 0;
+    let lap = 1;
 
     return new Promise((resolve) => {
       const interval = setInterval(() => {
+        if (this._runControl?.stopRequested) {
+          clearInterval(interval);
+          resolve();
+          return;
+        }
+
         // Advance simulated time
         elapsedSimMs += this.tickMs * this.timeScale;
 
         if (elapsedSimMs >= totalDurMs) {
-          clearInterval(interval);
-          resolve();
-          return;
+          if (!this.continuous) {
+            clearInterval(interval);
+            resolve();
+            return;
+          }
+
+          elapsedSimMs = elapsedSimMs % totalDurMs;
+          this.batteryLevel = 100;
+          lap += 1;
+          console.log(`  🔁 [${this._tag()}] Loop ${lap}`);
         }
 
         const simTimeMs = startMs + elapsedSimMs;
@@ -409,8 +425,9 @@ class FlightPlanFollower {
    * @param {string} wsUrl   - e.g. 'http://localhost:3000'
    * @param {string} token   - JWT bearer token
    */
-  async fly(baseUrl, wsUrl, token) {
+  async fly(baseUrl, wsUrl, token, runControl = null) {
     try {
+      this._runControl = runControl;
       this.status = 'CONNECTING';
       await this._connectSocket(wsUrl, token);
 
