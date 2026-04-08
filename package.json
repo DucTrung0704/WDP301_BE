@@ -8,6 +8,8 @@
     "worker": "node ./src/workers/telemetryRedisWorker.js",
     "worker:dev": "nodemon ./src/workers/telemetryRedisWorker.js",
     "test:telemetry": "node ./scripts/test-telemetry.js",
+    "simulate": "node ./scripts/simulate-mission.js",
+    "simulate:dev": "nodemon ./scripts/simulate-mission.js",
     "test": "jest"
   },
   "dependencies": {

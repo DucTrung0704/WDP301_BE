@@ -774,6 +774,109 @@ const options = {
             batteryLevel: { type: "number", example: 85 },
           },
         },
+        SimulationStartRequest: {
+          type: "object",
+          properties: {
+            mode: {
+              type: "string",
+              enum: ["normal", "deviation", "battery-drop"],
+              example: "normal",
+              description: "Simulation mode for fleet mission execution",
+            },
+            timeScale: {
+              type: "number",
+              example: 10,
+              description: "Simulation speed multiplier. 10 means 1 second real time equals 10 seconds simulated",
+            },
+            tickMs: {
+              type: "integer",
+              example: 1000,
+              description: "Telemetry emission interval in milliseconds",
+            },
+            deviationDroneIndex: {
+              type: "integer",
+              example: 0,
+              description: "Drone index that will receive deviation mode. Only used when mode=deviation",
+            },
+            skipSafetyCheck: {
+              type: "boolean",
+              example: false,
+              description: "Skip the pre-flight pairwise safety check before launch",
+            },
+            baseUrl: {
+              type: "string",
+              example: "http://localhost:5000",
+              description: "Optional override for simulator REST base URL",
+            },
+            wsUrl: {
+              type: "string",
+              example: "http://localhost:5000",
+              description: "Optional override for simulator WebSocket URL",
+            },
+          },
+        },
+        SimulationRunLog: {
+          type: "object",
+          properties: {
+            ts: { type: "string", format: "date-time" },
+            stream: {
+              type: "string",
+              enum: ["stdout", "stderr"],
+              example: "stdout",
+            },
+            message: {
+              type: "string",
+              example: "🚀  Launching 3 drone(s)...",
+            },
+          },
+        },
+        SimulationRun: {
+          type: "object",
+          properties: {
+            runId: {
+              type: "string",
+              example: "1d86a0ea-d4ba-4ca8-8d14-f5a33da5b98f",
+            },
+            missionId: {
+              type: "string",
+              example: "67f3b5f91c2b6c2d5fb92410",
+            },
+            userId: {
+              type: "string",
+              example: "67f3b44e1c2b6c2d5fb923aa",
+            },
+            status: {
+              type: "string",
+              enum: ["RUNNING", "STOPPING", "STOPPED", "COMPLETED", "FAILED"],
+              example: "RUNNING",
+            },
+            startedAt: { type: "string", format: "date-time" },
+            endedAt: { type: "string", format: "date-time", nullable: true },
+            exitCode: { type: "integer", nullable: true, example: null },
+            signal: { type: "string", nullable: true, example: null },
+            pid: { type: "integer", example: 14820 },
+            command: {
+              type: "string",
+              example: "node scripts/simulate-mission.js --missionId=67f3b5f91c2b6c2d5fb92410 --token=*** --mode=normal --timeScale=10 --tickMs=1000",
+            },
+            options: {
+              type: "object",
+              properties: {
+                mode: { type: "string", example: "normal" },
+                timeScale: { type: "number", example: 10 },
+                tickMs: { type: "integer", example: 1000 },
+                deviationDroneIndex: { type: "integer", nullable: true, example: 0 },
+                skipSafetyCheck: { type: "boolean", example: false },
+                baseUrl: { type: "string", nullable: true, example: "http://localhost:5000" },
+                wsUrl: { type: "string", nullable: true, example: "http://localhost:5000" },
+              },
+            },
+            logs: {
+              type: "array",
+              items: { $ref: "#/components/schemas/SimulationRunLog" },
+            },
+          },
+        },
       },
     },
   },

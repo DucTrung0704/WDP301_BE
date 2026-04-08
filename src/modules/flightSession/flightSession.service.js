@@ -4,7 +4,7 @@ const Drone = require("../../../models/drone.model");
 const Telemetry = require("../telemetry/telemetry.model");
 
 /**
- * Start planned session — requires APPROVED FlightPlan
+ * Start planned session — requires ACTIVE FlightPlan
  * Both INDIVIDUAL_OPERATOR and FLEET_OPERATOR can use this
  */
 async function startPlannedSession(flightPlanId, userId) {
@@ -15,9 +15,9 @@ async function startPlannedSession(flightPlanId, userId) {
     throw new Error("Unauthorized: You don't own this flight plan");
   }
 
-  if (plan.status !== "APPROVED") {
+  if (plan.status !== "ACTIVE") {
     throw new Error(
-      `Cannot start session: flight plan status is "${plan.status}". Only APPROVED plans can start sessions.`,
+      `Cannot start session: flight plan status is "${plan.status}". Only ACTIVE plans can start sessions.`,
     );
   }
 

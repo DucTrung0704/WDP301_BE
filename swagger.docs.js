@@ -160,6 +160,165 @@
 /**
  * @swagger
  * tags:
+ *   - name: Simulation Control
+ *     description: Điều khiển Fleet Mission Simulator qua REST cho FE
+ */
+
+/**
+ * @swagger
+ * /api/simulations/missions/{id}/start:
+ *   post:
+ *     summary: Khởi chạy fleet mission simulator cho một mission
+ *     description: |
+ *       Start simulator process ở backend để FE không cần chạy lệnh tay.
+ *       Backend sẽ tự spawn script simulate-mission.js với JWT của request hiện tại.
+ *     tags: [Simulation Control]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: MongoDB ObjectId của mission cần mô phỏng
+ *         example: 67f3b5f91c2b6c2d5fb92410
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SimulationStartRequest'
+ *           example:
+ *             mode: normal
+ *             timeScale: 10
+ *             tickMs: 1000
+ *             skipSafetyCheck: false
+ *     responses:
+ *       202:
+ *         description: Simulation được tạo thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Simulation started
+ *                 run:
+ *                   $ref: '#/components/schemas/SimulationRun'
+ *       401:
+ *         description: Thiếu hoặc sai Bearer token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Không đủ quyền để chạy simulator
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       409:
+ *         description: Mission này đã có một simulation đang chạy cho user hiện tại
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Lỗi server khi khởi tạo process simulator
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+
+/**
+ * @swagger
+ * /api/simulations/{runId}/stop:
+ *   post:
+ *     summary: Dừng simulation đang chạy
+ *     tags: [Simulation Control]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: runId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: UUID của simulation run
+ *         example: 1d86a0ea-d4ba-4ca8-8d14-f5a33da5b98f
+ *     responses:
+ *       200:
+ *         description: Yêu cầu dừng simulation đã được ghi nhận
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Stopping simulation
+ *                 run:
+ *                   $ref: '#/components/schemas/SimulationRun'
+ *       403:
+ *         description: Không có quyền dừng run này
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Không tìm thấy simulation run
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+
+/**
+ * @swagger
+ * /api/simulations/{runId}/status:
+ *   get:
+ *     summary: Lấy trạng thái và log của simulation run
+ *     tags: [Simulation Control]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: runId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: UUID của simulation run
+ *         example: 1d86a0ea-d4ba-4ca8-8d14-f5a33da5b98f
+ *     responses:
+ *       200:
+ *         description: Trạng thái hiện tại của simulation run
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 run:
+ *                   $ref: '#/components/schemas/SimulationRun'
+ *       403:
+ *         description: Không có quyền xem run này
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Không tìm thấy simulation run
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+
+/**
+ * @swagger
+ * tags:
  *   - name: Admin
  *     description: Quản lý tài khoản (chỉ UTM_ADMIN)
  *   - name: Users

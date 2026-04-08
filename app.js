@@ -80,6 +80,10 @@ app.use(
 ); // flight session management
 app.use("/api/telemetry", require("./src/modules/telemetry/telemetry.routes")); // telemetry REST fallback
 app.use("/api/alerts", require("./src/modules/alert/alert.routes")); // alert management
+app.use(
+  "/api/simulations",
+  require("./src/modules/simulation/simulation.routes"),
+); // simulation control for FE (start/stop/status)
 
 /* =========================
    404 HANDLER
