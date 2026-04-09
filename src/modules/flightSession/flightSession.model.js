@@ -7,6 +7,11 @@ const FlightSessionSchema = new mongoose.Schema(
       ref: "FlightPlan",
       // Optional — null cho FREE_FLIGHT
     },
+    missionPlan: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "MissionPlan",
+      // Optional — only set when session started from a MissionPlan
+    },
     drone: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Drone",

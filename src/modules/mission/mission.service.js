@@ -338,8 +338,8 @@ async function updateMissionPlan(
 
     if (data.status !== undefined) {
         assertValid(
-            ["SCHEDULED", "CANCELLED"].includes(data.status),
-            "status must be one of SCHEDULED, CANCELLED.",
+            ["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"].includes(data.status),
+            "status must be one of SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED.",
         );
         missionPlan.status = data.status;
     }

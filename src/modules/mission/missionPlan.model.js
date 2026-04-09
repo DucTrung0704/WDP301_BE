@@ -31,7 +31,7 @@ const MissionPlanSchema = new mongoose.Schema(
         },
         status: {
             type: String,
-            enum: ["SCHEDULED", "CANCELLED"],
+            enum: ["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"],
             default: "SCHEDULED",
             index: true,
         },

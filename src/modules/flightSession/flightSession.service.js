@@ -1,13 +1,14 @@
 const FlightSession = require("./flightSession.model");
 const FlightPlan = require("../flightPlan/flightPlan.model");
+const MissionPlan = require("../mission/missionPlan.model");
 const Drone = require("../../../models/drone.model");
 const Telemetry = require("../telemetry/telemetry.model");
 
 /**
- * Start planned session — requires ACTIVE FlightPlan
+ * Start planned session — requires ACTIVE FlightPlan and optional MissionPlanId
  * Both INDIVIDUAL_OPERATOR and FLEET_OPERATOR can use this
  */
-async function startPlannedSession(flightPlanId, userId) {
+async function startPlannedSession(flightPlanId, userId, missionPlanId = null) {
   const plan = await FlightPlan.findById(flightPlanId);
   if (!plan) throw new Error("Flight plan not found");
 
@@ -39,15 +40,35 @@ async function startPlannedSession(flightPlanId, userId) {
     throw new Error("Drone already has an active flight session");
   }
 
+  // If missionPlanId provided, validate and prepare to update its status
+  let missionPlan = null;
+  if (missionPlanId) {
+    missionPlan = await MissionPlan.findById(missionPlanId);
+    if (!missionPlan) throw new Error("Mission plan not found");
+    if (missionPlan.status !== "SCHEDULED") {
+      throw new Error(`Mission plan is already ${missionPlan.status}`);
+    }
+    if (missionPlan.flightPlan.toString() !== plan._id.toString()) {
+      throw new Error("Mission plan does not reference this flight plan");
+    }
+  }
+
   // Create session
   const session = await FlightSession.create({
     flightPlan: plan._id,
+    missionPlan: missionPlanId,
     drone: drone._id,
     pilot: userId,
     sessionType: "PLANNED",
     status: "IN_PROGRESS",
     actualStart: new Date(),
   });
+
+  // Update MissionPlan status if it was provided
+  if (missionPlan) {
+    missionPlan.status = "IN_PROGRESS";
+    await missionPlan.save();
+  }
 
   // Set drone status to FLYING
   drone.status = "FLYING";
@@ -123,6 +144,11 @@ async function endSession(sessionId, userId) {
 
   await session.save();
 
+  // Update MissionPlan status if linked
+  if (session.missionPlan) {
+    await MissionPlan.findByIdAndUpdate(session.missionPlan, { status: "COMPLETED" });
+  }
+
   // Set drone back to IDLE
   await Drone.findByIdAndUpdate(session.drone, { status: "IDLE" });
 
@@ -148,6 +174,11 @@ async function abortSession(sessionId, userId) {
   session.actualEnd = new Date();
   await buildActualRoute(session);
   await session.save();
+
+  // Update MissionPlan status to COMPLETED if linked
+  if (session.missionPlan) {
+    await MissionPlan.findByIdAndUpdate(session.missionPlan, { status: "COMPLETED" });
+  }
 
   await Drone.findByIdAndUpdate(session.drone, { status: "IDLE" });
 
@@ -175,6 +206,11 @@ async function emergencyLand(sessionId, userId) {
   session.actualEnd = new Date();
   await buildActualRoute(session);
   await session.save();
+
+  // Update MissionPlan status to COMPLETED if linked
+  if (session.missionPlan) {
+    await MissionPlan.findByIdAndUpdate(session.missionPlan, { status: "COMPLETED" });
+  }
 
   await Drone.findByIdAndUpdate(session.drone, { status: "IDLE" });
 

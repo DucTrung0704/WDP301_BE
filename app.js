@@ -7,6 +7,7 @@ var mongoose = require("mongoose");
 var swaggerUi = require("swagger-ui-express");
 var swaggerSpec = require("./swagger.config");
 var cors = require("cors");
+const { initializeMissionScheduler } = require("./src/modules/mission/mission.scheduler");
 require("dotenv").config();
 
 var app = express();
@@ -16,7 +17,11 @@ var app = express();
 ========================= */
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected!!"))
+  .then(() => {
+    console.log("MongoDB connected!!");
+    // Initialize mission scheduler after successful DB connection
+    initializeMissionScheduler();
+  })
   .catch((err) => console.error("MongoDB error:", err));
 
 /* =========================

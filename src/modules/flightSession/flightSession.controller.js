@@ -17,11 +17,11 @@ const flightPlanSummarySelect = [
 
 /**
  * POST /api/flight-sessions/start
- * Start planned session (requires flightPlanId)
+ * Start planned session (requires flightPlanId, optional missionPlanId)
  */
 exports.startPlanned = async (req, res) => {
   try {
-    const { flightPlanId } = req.body;
+    const { flightPlanId, missionPlanId } = req.body;
     if (!flightPlanId) {
       return res.status(400).json({ message: "flightPlanId is required" });
     }
@@ -29,11 +29,13 @@ exports.startPlanned = async (req, res) => {
     const session = await flightSessionService.startPlannedSession(
       flightPlanId,
       req.user.id,
+      missionPlanId,
     );
 
     const populated = await session.populate([
       { path: "drone", select: "droneId serialNumber model" },
       { path: "flightPlan", select: flightPlanSummarySelect },
+      { path: "missionPlan" },
     ]);
 
     return res.status(201).json(populated);
@@ -45,7 +47,8 @@ exports.startPlanned = async (req, res) => {
       err.message.includes("Unauthorized") ||
       err.message.includes("Cannot") ||
       err.message.includes("Only") ||
-      err.message.includes("already")
+      err.message.includes("already") ||
+      err.message.includes("does not reference")
     ) {
       return res.status(400).json({ message: err.message });
     }
