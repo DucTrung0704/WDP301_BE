@@ -67,12 +67,12 @@ exports.webhook = async (req, res) => {
     const mySecretKey = process.env.SEPAY_WEBHOOK_KEY;
 
     if (!authHeader || authHeader !== `Apikey ${mySecretKey}`) {
-        console.warn("🚨 CẢNH BÁO: Phát hiện request giả mạo Webhook từ IP:", req.ip);
+        console.warn("CẢNH BÁO: Phát hiện request giả mạo Webhook từ IP:", req.ip);
         return res.status(401).json({ success: false, code: 401, message: "Unauthorized" });
     }
 
     const payload = req.body;
-    console.log("👌 Webhook payload hợp lệ:", payload);
+    console.log("Webhook payload hợp lệ:", payload);
 
     const content = payload.content || "";
     const match = content.match(/DH\d+/);
@@ -98,15 +98,15 @@ exports.webhook = async (req, res) => {
                                 const pkg = await PackageModel.findById(pendingPayment.package_id);
                                 if (pkg) additionalMonths = pkg.duration_months;
                             }
-                            
-                            const baseDate = (userModelInst.premium_expires_at && userModelInst.premium_expires_at > new Date()) 
-                                ? userModelInst.premium_expires_at 
+
+                            const baseDate = (userModelInst.premium_expires_at && userModelInst.premium_expires_at > new Date())
+                                ? userModelInst.premium_expires_at
                                 : new Date();
                             baseDate.setMonth(baseDate.getMonth() + additionalMonths);
-                            
-                            await UserModel.findByIdAndUpdate(customer_id, { 
-                                role: "FLEET_OPERATOR", 
-                                premium_expires_at: baseDate 
+
+                            await UserModel.findByIdAndUpdate(customer_id, {
+                                role: "FLEET_OPERATOR",
+                                premium_expires_at: baseDate
                             });
                         }
                     }
@@ -162,7 +162,7 @@ exports.webhook = async (req, res) => {
 exports.getPaymentHistory = async (req, res) => {
     try {
         const customer_id = req.user.id;
-        const payments = await PaymentModel.find({ customer_id: customer_id }).sort({ createdAt: -1 });
+        const payments = await PaymentModel.find({ customer_id: customer_id }).populate({ path: "customer_id", select: "profile email role" }).sort({ createdAt: -1 });
 
         return res.status(200).json({
             success: true,
@@ -182,7 +182,7 @@ exports.getPaymentHistory = async (req, res) => {
 
 exports.getAllPayments = async (req, res) => {
     try {
-        const payments = await PaymentModel.find().sort({ createdAt: -1 });
+        const payments = await PaymentModel.find().populate({ path: "customer_id", select: "profile email role" }).sort({ createdAt: -1 });
 
         return res.status(200).json({
             success: true,
@@ -203,41 +203,58 @@ exports.getAllPayments = async (req, res) => {
 exports.getRevenueStatistics = async (req, res) => {
     try {
         const matchStage = { $match: { status: "SUCCESS" } };
+        const [dailyStats, monthlyStats, quarterlyStats, yearlyStats] = await Promise.all([
+            PaymentModel.aggregate([
+                matchStage,
+                {
+                    $group: {
+                        _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" }, day: { $dayOfMonth: "$createdAt" } },
+                        totalRevenue: { $sum: "$order_amount" },
+                        transactionCount: { $sum: 1 }
+                    }
+                },
+                { $sort: { "_id.year": -1, "_id.month": -1, "_id.day": -1 } }
+            ]),
 
-        const dailyStats = await PaymentModel.aggregate([
-            matchStage,
-            {
-                $group: {
-                    _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" }, day: { $dayOfMonth: "$createdAt" } },
-                    totalRevenue: { $sum: "$order_amount" },
-                    transactionCount: { $sum: 1 }
-                }
-            },
-            { $sort: { "_id.year": -1, "_id.month": -1, "_id.day": -1 } }
-        ]);
+            PaymentModel.aggregate([
+                matchStage,
+                {
+                    $group: {
+                        _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } },
+                        totalRevenue: { $sum: "$order_amount" },
+                        transactionCount: { $sum: 1 }
+                    }
+                },
+                { $sort: { "_id.year": -1, "_id.month": -1 } }
+            ]),
 
-        const monthlyStats = await PaymentModel.aggregate([
-            matchStage,
-            {
-                $group: {
-                    _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } },
-                    totalRevenue: { $sum: "$order_amount" },
-                    transactionCount: { $sum: 1 }
-                }
-            },
-            { $sort: { "_id.year": -1, "_id.month": -1 } }
-        ]);
+            PaymentModel.aggregate([
+                matchStage,
+                {
+                    $group: {
+                        _id: {
+                            year: { $year: "$createdAt" },
+                            // Tính quý: Math.ceil(month / 3)
+                            quarter: { $ceil: { $divide: [{ $month: "$createdAt" }, 3] } }
+                        },
+                        totalRevenue: { $sum: "$order_amount" },
+                        transactionCount: { $sum: 1 }
+                    }
+                },
+                { $sort: { "_id.year": -1, "_id.quarter": -1 } }
+            ]),
 
-        const yearlyStats = await PaymentModel.aggregate([
-            matchStage,
-            {
-                $group: {
-                    _id: { year: { $year: "$createdAt" } },
-                    totalRevenue: { $sum: "$order_amount" },
-                    transactionCount: { $sum: 1 }
-                }
-            },
-            { $sort: { "_id.year": -1 } }
+            PaymentModel.aggregate([
+                matchStage,
+                {
+                    $group: {
+                        _id: { year: { $year: "$createdAt" } },
+                        totalRevenue: { $sum: "$order_amount" },
+                        transactionCount: { $sum: 1 }
+                    }
+                },
+                { $sort: { "_id.year": -1 } }
+            ])
         ]);
 
         return res.status(200).json({
@@ -246,6 +263,7 @@ exports.getRevenueStatistics = async (req, res) => {
             data: {
                 daily: dailyStats,
                 monthly: monthlyStats,
+                quarterly: quarterlyStats,
                 yearly: yearlyStats
             }
         });
@@ -258,4 +276,42 @@ exports.getRevenueStatistics = async (req, res) => {
             message: "Lỗi hệ thống khi thống kê doanh thu"
         });
     }
-};
+};
+
+exports.getAllTransaction = async (req, res) => {
+    try {
+        const [revenueResult, totalTransactions, totalPending, totalSuccess] = await Promise.all([
+            PaymentModel.aggregate([
+                { $match: { status: "SUCCESS" } },
+                { $group: { _id: null, total: { $sum: "$order_amount" } } }
+            ]),
+
+            PaymentModel.countDocuments(),
+
+            PaymentModel.countDocuments({ status: "PENDING" }),
+
+            PaymentModel.countDocuments({ status: "SUCCESS" })
+        ]);
+
+        const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total : 0;
+
+        return res.status(200).json({
+            success: true,
+            code: 200,
+            data: {
+                totalRevenue,
+                totalTransactions,
+                totalPending,
+                totalSuccess
+            }
+        });
+    } catch (e) {
+        console.error("Lỗi khi lấy tổng quan giao dịch:", e);
+        return res.status(500).json({
+            success: false,
+            code: 500,
+            message: "Lỗi hệ thống khi lấy dữ liệu tổng quan giao dịch",
+            error: e.message
+        });
+    }
+}

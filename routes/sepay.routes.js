@@ -10,5 +10,6 @@ router.get("/payment-history", authenticate, sepayController.getPaymentHistory);
 
 router.get("/admin/payments", authenticate, authorizeRoles("UTM_ADMIN"), sepayController.getAllPayments);
 router.get("/admin/revenue", authenticate, authorizeRoles("UTM_ADMIN"), sepayController.getRevenueStatistics);
+router.get("/admin/transaction", authenticate, authorizeRoles("UTM_ADMIN"), sepayController.getAllTransaction);
 
 module.exports = router;

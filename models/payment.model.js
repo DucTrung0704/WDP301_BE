@@ -14,8 +14,9 @@ const PaymentSchema = new mongoose.Schema({
         required: true,
     },
     customer_id: {
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
         required: false,
+        ref: "User"
     },
     package_id: {
         type: String,

@@ -3272,7 +3272,7 @@
  * @swagger
  * /api/sepay/webhook:
  *   post:
- *     summary: Khởi tạo URL thanh toán Sepay
+ *     summary: webhook sepay trả về
  *     tags: [Sepay]
  *     responses:
  *       200:
@@ -3432,19 +3432,14 @@
  *         description: Xóa thành công
  */
 
-/**
- * @swagger
- * tags:
- *   - name: Payments
- *     description: Quản lý thanh toán
- */
+
 
 /**
  * @swagger
  * /api/sepay/payment-history:
  *   get:
- *     summary: Lấy danh sách lịch sử thanh toán của người dùng hiện tại
- *     tags: [Payments]
+ *     summary: Lấy danh sách lịch sử thanh toán của người dùng hiện tại [User]
+ *     tags: [Sepay]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -3495,7 +3490,7 @@
  * /api/sepay/admin/payments:
  *   get:
  *     summary: Lấy danh sách tất cả lịch sử thanh toán (Chỉ Admin)
- *     tags: [Admin]
+ *     tags: [Sepay]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -3528,8 +3523,8 @@
  * @swagger
  * /api/sepay/admin/revenue:
  *   get:
- *     summary: Thống kê doanh thu theo ngày, tháng, năm (Chỉ Admin)
- *     tags: [Admin]
+ *     summary: Thống kê doanh thu theo ngày, tháng, năm, quý (Chỉ Admin)
+ *     tags: [Sepay]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -3761,3 +3756,61 @@
  *         description: Lỗi server
  */
 
+/**
+ * @swagger
+ * /api/sepay/admin/transaction:
+ *   get:
+ *     summary: Lấy thống kê tổng quan của tất cả giao dịch (tổng giao dich, tổng tiền, số giao dịch success, pending) [Admin]
+ *     tags: [Sepay]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lấy dữ liệu tổng quan thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: number
+ *                   example: 200
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalRevenue:
+ *                       type: number
+ *                       description: Tổng doanh thu (chỉ tính đơn SUCCESS)
+ *                       example: 5000000
+ *                     totalTransactions:
+ *                       type: number
+ *                       description: Tổng số lượng tất cả giao dịch được tạo
+ *                       example: 125
+ *                     totalPending:
+ *                       type: number
+ *                       description: Tổng số giao dịch đang chờ thanh toán
+ *                       example: 25
+ *                     totalSuccess:
+ *                       type: number
+ *                       description: Tổng số giao dịch đã thanh toán thành công
+ *                       example: 100
+ *       500:
+ *         description: Lỗi server
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: number
+ *                   example: 500
+ *                 message:
+ *                   type: string
+ *                   example: Lỗi hệ thống khi lấy dữ liệu tổng quan giao dịch
+ */
