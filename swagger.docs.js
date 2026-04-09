@@ -3675,3 +3675,360 @@
  *       500:
  *         description: Lỗi server
  */
+
+/**
+ * @swagger
+ * /api/auth/google:
+ *   post:
+ *     summary: Đăng nhập/Đăng ký với Google
+ *     description: |
+ *       Xác thực tài khoản Google. Nếu email chưa verify, trả về 202 với cờ requiresEmailVerification.
+ *       Sau đó dùng endpoint verify-email để confirm mã OTP.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               idToken:
+ *                 type: string
+ *                 description: Google ID Token từ Google OAuth2
+ *               fullName:
+ *                 type: string
+ *                 description: Tên đầy đủ (optional, nếu mới tạo account)
+ *             required:
+ *               - idToken
+ *           example:
+ *             idToken: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *             fullName: "John Doe"
+ *     responses:
+ *       200:
+ *         description: Đăng nhập thành công (email đã verified)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     profile:
+ *                       type: object
+ *                       properties:
+ *                         fullName:
+ *                           type: string
+ *                     role:
+ *                       type: string
+ *                     status:
+ *                       type: string
+ *             example:
+ *               token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *               refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *               user:
+ *                 _id: "507f1f77bcf86cd799439011"
+ *                 email: "user@example.com"
+ *                 profile:
+ *                   fullName: "John Doe"
+ *                 role: "INDIVIDUAL_OPERATOR"
+ *                 status: "active"
+ *       202:
+ *         description: Email chưa verify - cần confirm OTP
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 requiresEmailVerification:
+ *                   type: boolean
+ *                   example: true
+ *                 email:
+ *                   type: string
+ *                 message:
+ *                   type: string
+ *             example:
+ *               requiresEmailVerification: true
+ *               email: "user@example.com"
+ *               message: "Verification code sent to email"
+ *       400:
+ *         description: Invalid or expired idToken
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/auth/google/verify-email:
+ *   post:
+ *     summary: Xác thực email với mã OTP cho Google signup
+ *     description: Validate mã xác thực (6 chữ số) gửi qua email, sau đó issue JWT tokens
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *               code:
+ *                 type: string
+ *                 description: Mã OTP gồm 6 chữ số
+ *             required:
+ *               - email
+ *               - code
+ *           example:
+ *             email: "user@example.com"
+ *             code: "123456"
+ *     responses:
+ *       200:
+ *         description: Email verified thành công, token được issued
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *             example:
+ *               token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *               refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *               user:
+ *                 _id: "507f1f77bcf86cd799439011"
+ *                 email: "user@example.com"
+ *                 profile:
+ *                   fullName: "John Doe"
+ *       400:
+ *         description: Mã OTP không hợp lệ hoặc hết hạn (10 phút)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *             example:
+ *               message: "Invalid or expired verification code"
+ *       404:
+ *         description: Email không tồn tại
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/auth/google/resend-code:
+ *   post:
+ *     summary: Gửi lại mã OTP cho xác thực email Google
+ *     description: Gửi lại mã OTP nếu không nhận được hoặc hết hạn (cooldown 60 giây)
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *             required:
+ *               - email
+ *           example:
+ *             email: "user@example.com"
+ *     responses:
+ *       200:
+ *         description: Mã OTP được gửi lại thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *             example:
+ *               message: "Verification code resent"
+ *       429:
+ *         description: Quá nhiều yêu cầu - vui lòng chờ 60 giây
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 retryAfter:
+ *                   type: number
+ *                   description: Giây cần chờ
+ *             example:
+ *               message: "Too many requests. Please try again later"
+ *               retryAfter: 45
+ *       404:
+ *         description: Email không tồn tại
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/auth/forgot-password/request:
+ *   post:
+ *     summary: Yêu cầu đặt lại password - gửi mã OTP qua email
+ *     description: |
+ *       Gửi mã OTP đặt lại password để email người dùng.
+ *       Phản hồi an toàn (không lộ tồn tại của tài khoản).
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *             required:
+ *               - email
+ *           example:
+ *             email: "user@example.com"
+ *     responses:
+ *       200:
+ *         description: Email gửi thành công (hoặc email không tồn tại - response an toàn)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *             example:
+ *               message: "If an account with this email exists, password reset code has been sent"
+ *       429:
+ *         description: Quá nhiều yêu cầu - chờ 60 giây
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 retryAfter:
+ *                   type: number
+ *             example:
+ *               message: "Too many requests"
+ *               retryAfter: 45
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/auth/forgot-password/resend-code:
+ *   post:
+ *     summary: Gửi lại mã OTP đặt lại password
+ *     description: Gửi lại mã nếu không nhận được (cooldown 60 giây)
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *             required:
+ *               - email
+ *           example:
+ *             email: "user@example.com"
+ *     responses:
+ *       200:
+ *         description: Mã được gửi lại (hoặc email không tồn tại - response an toàn)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *             example:
+ *               message: "If an account with this email exists, password reset code has been resent"
+ *       429:
+ *         description: Quá nhiều yêu cầu - chờ 60 giây
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/auth/forgot-password/reset:
+ *   post:
+ *     summary: Đặt lại password với mã OTP
+ *     description: |
+ *       Validate mã OTP + Password mới (minimum 8 ký tự).
+ *       Sau khi thành công, tất cả refresh tokens bị xóa (logout khỏi tất cả devices).
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *               code:
+ *                 type: string
+ *                 description: Mã OTP từ email (6 chữ số)
+ *               newPassword:
+ *                 type: string
+ *                 description: Password mới (minimum 8 ký tự)
+ *             required:
+ *               - email
+ *               - code
+ *               - newPassword
+ *           example:
+ *             email: "user@example.com"
+ *             code: "123456"
+ *             newPassword: "NewPassword123!"
+ *     responses:
+ *       200:
+ *         description: Password đặt lại thành công, đã logout khỏi tất cả devices
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *             example:
+ *               message: "Password reset successfully"
+ *       400:
+ *         description: Mã không hợp lệ, password yếu, hoặc mã hết hạn (10 phút)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *             example:
+ *               message: "Invalid or expired code"
+ *       404:
+ *         description: Email không tồn tại
+ *       500:
+ *         description: Lỗi server
+ */

@@ -63,6 +63,36 @@ const userSchema = new mongoose.Schema(
 
         //Audit
         lastLoginAt: Date,
+
+        // Email verification (used by Google signup flow)
+        emailVerification: {
+            isVerified: {
+                type: Boolean,
+                default: true,
+            },
+            code: {
+                type: String,
+                select: false,
+            },
+            codeExpiresAt: {
+                type: Date,
+                select: false,
+            },
+            lastSentAt: Date,
+        },
+
+        // Forgot password flow
+        passwordReset: {
+            code: {
+                type: String,
+                select: false,
+            },
+            codeExpiresAt: {
+                type: Date,
+                select: false,
+            },
+            lastSentAt: Date,
+        },
     },
     {
         timestamps: true,

@@ -3,8 +3,41 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/user.models");
 const { OAuth2Client } = require("google-auth-library");
+const {
+    sendGoogleVerificationCodeEmail,
+    sendPasswordResetCodeEmail,
+} = require("../services/email.service");
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const GOOGLE_VERIFY_CODE_TTL_MS = 10 * 60 * 1000;
+const GOOGLE_VERIFY_RESEND_COOLDOWN_MS = 60 * 1000;
+const PASSWORD_RESET_CODE_TTL_MS = 10 * 60 * 1000;
+const PASSWORD_RESET_RESEND_COOLDOWN_MS = 60 * 1000;
+
+function generateVerificationCode() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function issueAuthTokens(user) {
+    const token = jwt.sign(
+        { userId: user._id, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+    );
+
+    const refreshToken = jwt.sign(
+        { userId: user._id },
+        process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+        { expiresIn: "30d" }
+    );
+
+    user.refreshTokens.push(refreshToken);
+    return { token, refreshToken };
+}
+
+function isStrongPassword(password) {
+    return typeof password === "string" && password.length >= 8;
+}
 
 /**
  * GOOGLE LOGIN / REGISTER (Web + Mobile)
@@ -26,44 +59,44 @@ exports.googleLogin = async (req, res) => {
 
         const payload = ticket.getPayload();
 
-        const {
-            sub: googleId,
-            email,
-            name,
-            picture,
-            email_verified,
-        } = payload;
+        const { sub: googleId, email, name, picture, email_verified } = payload;
 
         if (!email_verified) {
             return res.status(401).json({ message: "Email not verified by Google" });
         }
 
         // Check user exists
-        let user = await User.findOne({ email });
+        let user = await User.findOne({ email }).select("+emailVerification.code +emailVerification.codeExpiresAt");
 
         if (!user) {
-            // 👉 REGISTER new user by Google (default role: Individual Operator)
             user = await User.create({
                 email,
                 providers: {
-                    google: true,
+                    google: {
+                        id: googleId,
+                        email,
+                    },
                 },
-                googleId,
                 profile: {
                     fullName: name,
                     avatar: picture,
                 },
                 role: "INDIVIDUAL_OPERATOR",
                 status: "active",
+                emailVerification: {
+                    isVerified: false,
+                },
             });
+            user = await User.findById(user._id).select("+emailVerification.code +emailVerification.codeExpiresAt");
         } else {
-            // Nếu user tồn tại nhưng chưa link Google
-            if (!user.providers.google) {
-                user.providers.google = true;
-                user.googleId = googleId;
-                user.profile.avatar = user.profile.avatar || picture;
-                await user.save();
+            if (!user.providers) user.providers = {};
+            if (!user.providers.google || !user.providers.google.id) {
+                user.providers.google = { id: googleId, email };
             }
+
+            user.profile = user.profile || {};
+            user.profile.avatar = user.profile.avatar || picture;
+            user.profile.fullName = user.profile.fullName || name;
         }
 
         // Normalize legacy role to new enum
@@ -80,26 +113,39 @@ exports.googleLogin = async (req, res) => {
             return res.status(403).json({ message: "Account disabled" });
         }
 
-        // Update last login
+        const isEmailVerified = user.emailVerification?.isVerified !== false;
+        if (!isEmailVerified) {
+            const code = generateVerificationCode();
+
+            user.emailVerification = {
+                ...(user.emailVerification || {}),
+                isVerified: false,
+                code,
+                codeExpiresAt: new Date(Date.now() + GOOGLE_VERIFY_CODE_TTL_MS),
+                lastSentAt: new Date(),
+            };
+
+            const sent = await sendGoogleVerificationCodeEmail({
+                to: user.email,
+                fullName: user.profile?.fullName,
+                code,
+            });
+
+            if (!sent) {
+                return res.status(500).json({ message: "Failed to send verification code" });
+            }
+
+            await user.save();
+
+            return res.status(202).json({
+                message: "Verification code sent to your email",
+                email: user.email,
+                requiresEmailVerification: true,
+            });
+        }
+
         user.lastLoginAt = new Date();
-        await user.save();
-
-        // Generate JWT access token
-        const token = jwt.sign(
-            { userId: user._id, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: "7d" }
-        );
-
-        // Generate refresh token
-        const refreshToken = jwt.sign(
-            { userId: user._id },
-            process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
-            { expiresIn: "30d" }
-        );
-
-        // Store refresh token in database
-        user.refreshTokens.push(refreshToken);
+        const { token, refreshToken } = issueAuthTokens(user);
         await user.save();
 
         res.json({
@@ -110,6 +156,252 @@ exports.googleLogin = async (req, res) => {
     } catch (err) {
         console.error("Google login error:", err);
         res.status(500).json({ message: "Google login failed" });
+    }
+};
+
+/**
+ * GOOGLE EMAIL VERIFICATION
+ * Frontend gửi: { email, code }
+ */
+exports.verifyGoogleEmail = async (req, res) => {
+    try {
+        const email = (req.body.email || "").toLowerCase().trim();
+        const code = String(req.body.code || "").trim();
+
+        if (!email || !code) {
+            return res.status(400).json({ message: "email and code are required" });
+        }
+
+        const user = await User.findOne({ email }).select("+emailVerification.code +emailVerification.codeExpiresAt");
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (!user.providers?.google?.id) {
+            return res.status(400).json({ message: "This account is not registered with Google" });
+        }
+
+        const verification = user.emailVerification || {};
+        if (verification.isVerified) {
+            return res.status(200).json({ message: "Email already verified" });
+        }
+
+        if (!verification.code || verification.code !== code) {
+            return res.status(400).json({ message: "Invalid verification code" });
+        }
+
+        if (!verification.codeExpiresAt || new Date(verification.codeExpiresAt).getTime() < Date.now()) {
+            return res.status(400).json({ message: "Verification code expired" });
+        }
+
+        user.emailVerification = {
+            ...(user.emailVerification || {}),
+            isVerified: true,
+            code: undefined,
+            codeExpiresAt: undefined,
+        };
+
+        user.lastLoginAt = new Date();
+        const { token, refreshToken } = issueAuthTokens(user);
+        await user.save();
+
+        return res.json({ token, refreshToken, user });
+    } catch (err) {
+        console.error("Google verify email error:", err);
+        return res.status(500).json({ message: "Google email verification failed" });
+    }
+};
+
+/**
+ * RESEND GOOGLE EMAIL VERIFICATION CODE
+ * Frontend gửi: { email }
+ */
+exports.resendGoogleVerificationCode = async (req, res) => {
+    try {
+        const email = (req.body.email || "").toLowerCase().trim();
+        if (!email) {
+            return res.status(400).json({ message: "email is required" });
+        }
+
+        const user = await User.findOne({ email }).select("+emailVerification.code +emailVerification.codeExpiresAt");
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (!user.providers?.google?.id) {
+            return res.status(400).json({ message: "This account is not registered with Google" });
+        }
+
+        if (user.emailVerification?.isVerified) {
+            return res.status(200).json({ message: "Email already verified" });
+        }
+
+        const lastSentAt = user.emailVerification?.lastSentAt
+            ? new Date(user.emailVerification.lastSentAt).getTime()
+            : 0;
+        const now = Date.now();
+        const cooldownRemainingMs = GOOGLE_VERIFY_RESEND_COOLDOWN_MS - (now - lastSentAt);
+
+        if (cooldownRemainingMs > 0) {
+            return res.status(429).json({
+                message: "Please wait before requesting a new verification code",
+                retryAfterSeconds: Math.ceil(cooldownRemainingMs / 1000),
+            });
+        }
+
+        const code = generateVerificationCode();
+        user.emailVerification = {
+            ...(user.emailVerification || {}),
+            isVerified: false,
+            code,
+            codeExpiresAt: new Date(now + GOOGLE_VERIFY_CODE_TTL_MS),
+            lastSentAt: new Date(now),
+        };
+
+        const sent = await sendGoogleVerificationCodeEmail({
+            to: user.email,
+            fullName: user.profile?.fullName,
+            code,
+        });
+
+        if (!sent) {
+            return res.status(500).json({ message: "Failed to send verification code" });
+        }
+
+        await user.save();
+
+        return res.status(200).json({
+            message: "Verification code resent",
+            email: user.email,
+            expiresInSeconds: Math.floor(GOOGLE_VERIFY_CODE_TTL_MS / 1000),
+        });
+    } catch (err) {
+        console.error("Resend Google verification code error:", err);
+        return res.status(500).json({ message: "Resend verification code failed" });
+    }
+};
+
+/**
+ * FORGOT PASSWORD - REQUEST CODE
+ * Frontend gửi: { email }
+ */
+exports.requestPasswordResetCode = async (req, res) => {
+    try {
+        const email = (req.body.email || "").toLowerCase().trim();
+        if (!email) {
+            return res.status(400).json({ message: "email is required" });
+        }
+
+        const user = await User.findOne({ email }).select("+passwordReset.code +passwordReset.codeExpiresAt");
+
+        // Do not reveal account existence
+        if (!user) {
+            return res.status(200).json({
+                message: "If the email exists, a reset code has been sent",
+            });
+        }
+
+        const lastSentAt = user.passwordReset?.lastSentAt
+            ? new Date(user.passwordReset.lastSentAt).getTime()
+            : 0;
+        const now = Date.now();
+        const cooldownRemainingMs = PASSWORD_RESET_RESEND_COOLDOWN_MS - (now - lastSentAt);
+
+        if (cooldownRemainingMs > 0) {
+            return res.status(429).json({
+                message: "Please wait before requesting another reset code",
+                retryAfterSeconds: Math.ceil(cooldownRemainingMs / 1000),
+            });
+        }
+
+        const code = generateVerificationCode();
+        user.passwordReset = {
+            ...(user.passwordReset || {}),
+            code,
+            codeExpiresAt: new Date(now + PASSWORD_RESET_CODE_TTL_MS),
+            lastSentAt: new Date(now),
+        };
+
+        const sent = await sendPasswordResetCodeEmail({
+            to: user.email,
+            fullName: user.profile?.fullName,
+            code,
+        });
+
+        if (!sent) {
+            return res.status(500).json({ message: "Failed to send reset code" });
+        }
+
+        await user.save();
+
+        return res.status(200).json({
+            message: "If the email exists, a reset code has been sent",
+            expiresInSeconds: Math.floor(PASSWORD_RESET_CODE_TTL_MS / 1000),
+        });
+    } catch (err) {
+        console.error("Request password reset code error:", err);
+        return res.status(500).json({ message: "Request reset code failed" });
+    }
+};
+
+/**
+ * FORGOT PASSWORD - RESEND CODE
+ * Frontend gửi: { email }
+ */
+exports.resendPasswordResetCode = async (req, res) => {
+    // Reuse request flow so behavior and anti-spam are consistent
+    return exports.requestPasswordResetCode(req, res);
+};
+
+/**
+ * FORGOT PASSWORD - RESET PASSWORD
+ * Frontend gửi: { email, code, newPassword }
+ */
+exports.resetPasswordWithCode = async (req, res) => {
+    try {
+        const email = (req.body.email || "").toLowerCase().trim();
+        const code = String(req.body.code || "").trim();
+        const { newPassword } = req.body;
+
+        if (!email || !code || !newPassword) {
+            return res.status(400).json({ message: "email, code and newPassword are required" });
+        }
+
+        if (!isStrongPassword(newPassword)) {
+            return res.status(400).json({ message: "newPassword must be at least 8 characters" });
+        }
+
+        const user = await User.findOne({ email }).select("+passwordReset.code +passwordReset.codeExpiresAt");
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        const passwordReset = user.passwordReset || {};
+        if (!passwordReset.code || passwordReset.code !== code) {
+            return res.status(400).json({ message: "Invalid reset code" });
+        }
+
+        if (!passwordReset.codeExpiresAt || new Date(passwordReset.codeExpiresAt).getTime() < Date.now()) {
+            return res.status(400).json({ message: "Reset code expired" });
+        }
+
+        user.password = await bcrypt.hash(newPassword, 10);
+        user.providers = user.providers || {};
+        user.providers.local = true;
+        user.passwordReset = {
+            code: undefined,
+            codeExpiresAt: undefined,
+            lastSentAt: undefined,
+        };
+
+        // Invalidate old sessions after password reset
+        user.refreshTokens = [];
+        await user.save();
+
+        return res.status(200).json({ message: "Password reset successful" });
+    } catch (err) {
+        console.error("Reset password with code error:", err);
+        return res.status(500).json({ message: "Reset password failed" });
     }
 };
 

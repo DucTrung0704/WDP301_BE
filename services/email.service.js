@@ -12,17 +12,17 @@ const resend = new Resend(process.env.RESEND_API_KEY);
  * @param {Date}   options.expiresAt - Ngày hết hạn gói
  */
 async function sendPaymentSuccessEmail({ to, fullName, orderId, amount, packageName, expiresAt }) {
-    const formattedAmount = Number(amount).toLocaleString("vi-VN") + " VNĐ";
-    // const formattedExpiry = expiresAt
-    //     ? new Date(expiresAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })
-    //     : "N/A";
-    const displayName = fullName || to;
+  const formattedAmount = Number(amount).toLocaleString("vi-VN") + " VNĐ";
+  // const formattedExpiry = expiresAt
+  //     ? new Date(expiresAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })
+  //     : "N/A";
+  const displayName = fullName || to;
 
-    const { data, error } = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || "UTM System <noreply@resend.dev>",
-        to: [to],
-        subject: `✅ Thanh toán thành công – Đơn hàng ${orderId}`,
-        html: `
+  const { data, error } = await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL || "UTM System <noreply@resend.dev>",
+    to: [to],
+    subject: `✅ Thanh toán thành công – Đơn hàng ${orderId}`,
+    html: `
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -68,15 +68,111 @@ async function sendPaymentSuccessEmail({ to, fullName, orderId, amount, packageN
 </body>
 </html>
         `,
-    });
+  });
 
-    if (error) {
-        console.error("❌ Lỗi gửi email Resend:", error);
-        return false;
-    }
+  if (error) {
+    console.error("❌ Lỗi gửi email Resend:", error);
+    return false;
+  }
 
-    console.log("✅ Email thanh toán thành công đã gửi:", data?.id);
-    return true;
+  console.log("✅ Email thanh toán thành công đã gửi:", data?.id);
+  return true;
 }
 
-module.exports = { sendPaymentSuccessEmail };
+async function sendGoogleVerificationCodeEmail({ to, fullName, code }) {
+  const displayName = fullName || to;
+
+  const { data, error } = await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL || "UTM System <noreply@resend.dev>",
+    to: [to],
+    subject: "Ma xac nhan dang ky Google - UTM System",
+    html: `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f7fb; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 32px auto; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+    .header { background: linear-gradient(135deg, #1a73e8, #0d47a1); color: #fff; padding: 24px; }
+    .body { padding: 24px; color: #333; }
+    .otp { font-size: 28px; letter-spacing: 6px; font-weight: 700; color: #1a73e8; margin: 16px 0; }
+    .note { font-size: 13px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header"><h2>Xac minh email Google</h2></div>
+    <div class="body">
+      <p>Xin chao <strong>${displayName}</strong>,</p>
+      <p>Ma xac minh cua ban la:</p>
+      <div class="otp">${code}</div>
+      <p>Ma co hieu luc trong 10 phut.</p>
+      <p class="note">Neu ban khong thuc hien yeu cau nay, vui long bo qua email.</p>
+    </div>
+  </div>
+</body>
+</html>
+        `,
+  });
+
+  if (error) {
+    console.error("Failed to send Google verification email:", error);
+    return false;
+  }
+
+  console.log("Google verification email sent:", data?.id);
+  return true;
+}
+
+async function sendPasswordResetCodeEmail({ to, fullName, code }) {
+  const displayName = fullName || to;
+
+  const { data, error } = await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL || "UTM System <noreply@resend.dev>",
+    to: [to],
+    subject: "Ma dat lai mat khau - UTM System",
+    html: `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f7fb; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 32px auto; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+    .header { background: linear-gradient(135deg, #f57c00, #ef6c00); color: #fff; padding: 24px; }
+    .body { padding: 24px; color: #333; }
+    .otp { font-size: 28px; letter-spacing: 6px; font-weight: 700; color: #ef6c00; margin: 16px 0; }
+    .note { font-size: 13px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header"><h2>Dat lai mat khau</h2></div>
+    <div class="body">
+      <p>Xin chao <strong>${displayName}</strong>,</p>
+      <p>Ma xac nhan dat lai mat khau cua ban la:</p>
+      <div class="otp">${code}</div>
+      <p>Ma co hieu luc trong 10 phut.</p>
+      <p class="note">Neu ban khong yeu cau dat lai mat khau, vui long bo qua email nay.</p>
+    </div>
+  </div>
+</body>
+</html>
+        `,
+  });
+
+  if (error) {
+    console.error("Failed to send password reset email:", error);
+    return false;
+  }
+
+  console.log("Password reset email sent:", data?.id);
+  return true;
+}
+
+module.exports = {
+  sendPaymentSuccessEmail,
+  sendGoogleVerificationCodeEmail,
+  sendPasswordResetCodeEmail,
+};
