@@ -1834,10 +1834,13 @@
  *     summary: Tạo mới kế hoạch bay (ACTIVE)
  *     description: |
  *       Tạo một flight plan dạng route template ở trạng thái ACTIVE.
- *       Yêu cầu: batteryPercentageUsed (0-100%) và estimatedFlightTime (phút hoặc giây).
+ *       Yêu cầu: batteryPercentageUsed (0-100%) và estimatedFlightTime (> 0).
  *       Flight plan không còn chứa thời gian bay tổng thể.
  *       Lịch bay (plannedStart/plannedEnd) được quản lý ở MissionPlan.
  *       Hệ thống tự động tạo routeGeometry (GeoJSON LineString) từ waypoints.
+ *       FE nên bind:
+ *       - batteryPercentageUsed hoặc batteryUsagePercent
+ *       - estimatedFlightTime hoặc estimatedFlightTimeMinutes
  *       Validation chính:
  *       - waypoints từ 2 đến 500 điểm
  *       - sequenceNumber phải liên tục 1..N, không trùng
@@ -1902,7 +1905,9 @@
  *
  *   get:
  *     summary: Danh sách kế hoạch bay của user hiện tại
- *     description: Lấy danh sách flight plans với pagination và filter theo status.
+ *     description: |
+ *       Lấy danh sách flight plans với pagination và filter theo status.
+ *       Mỗi item có đầy đủ batteryPercentageUsed và estimatedFlightTime, kèm alias batteryUsagePercent và estimatedFlightTimeMinutes.
  *     tags: [Flight Plans]
  *     security:
  *       - bearerAuth: []
@@ -1964,6 +1969,12 @@
  * /api/flight-plans/{id}:
  *   get:
  *     summary: Chi tiết kế hoạch bay
+ *     description: |
+ *       Response chi tiết của flight plan luôn gồm:
+ *       - batteryPercentageUsed
+ *       - estimatedFlightTime
+ *       - batteryUsagePercent
+ *       - estimatedFlightTimeMinutes
  *     tags: [Flight Plans]
  *     security:
  *       - bearerAuth: []
@@ -2224,6 +2235,12 @@
  * /api/missions/{id}:
  *   get:
  *     summary: Chi tiết mission + danh sách MissionPlan
+ *     description: |
+ *       Với Fleet Operator, mỗi missionPlans[].flightPlan trong response đã bao gồm:
+ *       - batteryPercentageUsed
+ *       - estimatedFlightTime
+ *       - batteryUsagePercent
+ *       - estimatedFlightTimeMinutes
  *     tags: [Missions]
  *     security:
  *       - bearerAuth: []
@@ -2267,6 +2284,10 @@
  *                         - [106.701245, 10.775321]
  *                         - [106.712884, 10.768904]
  *                     _id: "69d1f1e1c3a9e1207b41a17b"
+ *                     batteryPercentageUsed: 75
+ *                     estimatedFlightTime: 1800
+ *                     batteryUsagePercent: 75
+ *                     estimatedFlightTimeMinutes: 1800
  *                     drone:
  *                       _id: "69d1eeb2c3a9e1207b419f44"
  *                       droneId: "DRONE-IRR-001"
@@ -2306,7 +2327,6 @@
  *                         speed: 12
  *                         estimatedTime: "2026-04-03T05:42:00.000Z"
  *                         action: "LAND"
- *                     conflictStatus: "CLEAR"
  *                     notes: "Irrigation route for sector B"
  *                     createdAt: "2026-04-03T05:28:14.221Z"
  *                     updatedAt: "2026-04-03T05:28:14.221Z"
@@ -2663,6 +2683,7 @@
  *     description: |
  *       Tạo FlightSession từ FlightPlan đã ACTIVE.
  *       Drone phải ở trạng thái IDLE. Tự động chuyển drone → FLYING.
+ *       Response trả về flightPlan đã populate sẵn các field FE thường dùng: estimatedFlightTime, batteryPercentageUsed và routeGeometry.
  *     tags: [Flight Sessions]
  *     security:
  *       - bearerAuth: []
@@ -2735,7 +2756,9 @@
  * /api/flight-sessions:
  *   get:
  *     summary: Danh sách phiên bay
- *     description: Operator xem session của mình, Admin xem tất cả.
+ *     description: |
+ *       Operator xem session của mình, Admin xem tất cả.
+ *       Với session kiểu PLANNED, field flightPlan trong mỗi item có summary gồm estimatedFlightTime, batteryPercentageUsed, routeGeometry và notes.
  *     tags: [Flight Sessions]
  *     security:
  *       - bearerAuth: []

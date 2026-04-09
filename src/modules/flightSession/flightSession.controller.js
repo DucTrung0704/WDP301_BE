@@ -4,6 +4,17 @@ const { getSessionTelemetry } = require("../telemetry/telemetry.service");
 const { getSessionAlerts } = require("../alert/alert.service");
 const mongoose = require("mongoose");
 
+const flightPlanSummarySelect = [
+  "status",
+  "priority",
+  "estimatedFlightTime",
+  "batteryPercentageUsed",
+  "routeGeometry",
+  "notes",
+  "createdAt",
+  "updatedAt",
+].join(" ");
+
 /**
  * POST /api/flight-sessions/start
  * Start planned session (requires flightPlanId)
@@ -22,7 +33,7 @@ exports.startPlanned = async (req, res) => {
 
     const populated = await session.populate([
       { path: "drone", select: "droneId serialNumber model" },
-      { path: "flightPlan", select: "status plannedStart plannedEnd" },
+      { path: "flightPlan", select: flightPlanSummarySelect },
     ]);
 
     return res.status(201).json(populated);
@@ -105,7 +116,7 @@ exports.list = async (req, res) => {
     const [sessions, totalCount] = await Promise.all([
       FlightSession.find(filter)
         .populate("drone", "droneId serialNumber model")
-        .populate("flightPlan", "status plannedStart plannedEnd")
+        .populate("flightPlan", flightPlanSummarySelect)
         .populate("pilot", "fullName email")
         .sort({ createdAt: -1 })
         .skip(skip)

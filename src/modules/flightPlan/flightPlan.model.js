@@ -99,7 +99,11 @@ const FlightPlanSchema = new mongoose.Schema(
       trim: true,
     },
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  },
 );
 
 // Validators
@@ -112,6 +116,14 @@ FlightPlanSchema.path("estimatedFlightTime").validate(
   (value) => Number.isFinite(value) && value > 0,
   "estimatedFlightTime must be a positive number.",
 );
+
+FlightPlanSchema.virtual("batteryUsagePercent").get(function () {
+  return this.batteryPercentageUsed;
+});
+
+FlightPlanSchema.virtual("estimatedFlightTimeMinutes").get(function () {
+  return this.estimatedFlightTime;
+});
 
 // Indexes
 FlightPlanSchema.index({ routeGeometry: "2dsphere" });

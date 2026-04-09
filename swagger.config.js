@@ -401,7 +401,7 @@ const options = {
         },
         CreateFlightPlanRequest: {
           type: "object",
-          required: ["drone", "waypoints"],
+          required: ["drone", "waypoints", "batteryPercentageUsed", "estimatedFlightTime"],
           description:
             "Route template only (no schedule time). Schedule is managed in MissionPlan.",
           properties: {
@@ -416,6 +416,19 @@ const options = {
               maximum: 10,
               default: 1,
               example: 1,
+            },
+            batteryPercentageUsed: {
+              type: "number",
+              minimum: 0,
+              maximum: 100,
+              example: 75,
+              description: "Estimated battery usage for the full route, in percent.",
+            },
+            estimatedFlightTime: {
+              type: "number",
+              minimum: 0,
+              example: 1800,
+              description: "Estimated total flight time for the route template.",
             },
             waypoints: {
               type: "array",
@@ -445,6 +458,19 @@ const options = {
               maximum: 10,
               example: 1,
             },
+            batteryPercentageUsed: {
+              type: "number",
+              minimum: 0,
+              maximum: 100,
+              example: 60,
+              description: "Estimated battery usage for the route, in percent.",
+            },
+            estimatedFlightTime: {
+              type: "number",
+              minimum: 0,
+              example: 1500,
+              description: "Estimated total flight time for the route template.",
+            },
             waypoints: {
               type: "array",
               minItems: 2,
@@ -465,9 +491,29 @@ const options = {
             pilot: { $ref: "#/components/schemas/User" },
             status: {
               type: "string",
-              enum: ["DRAFT", "PENDING", "APPROVED", "REJECTED", "CANCELLED"],
+              enum: ["ACTIVE", "INACTIVE"],
             },
             priority: { type: "integer" },
+            batteryPercentageUsed: {
+              type: "number",
+              example: 75,
+              description: "Estimated battery usage for the route, in percent.",
+            },
+            estimatedFlightTime: {
+              type: "number",
+              example: 1800,
+              description: "Estimated total flight time for the route template.",
+            },
+            batteryUsagePercent: {
+              type: "number",
+              example: 75,
+              description: "Alias of batteryPercentageUsed for FE convenience.",
+            },
+            estimatedFlightTimeMinutes: {
+              type: "number",
+              example: 1800,
+              description: "Alias of estimatedFlightTime for FE convenience.",
+            },
             waypoints: {
               type: "array",
               items: { $ref: "#/components/schemas/Waypoint" },
@@ -481,10 +527,6 @@ const options = {
                   items: { type: "array", items: { type: "number" } },
                 },
               },
-            },
-            conflictStatus: {
-              type: "string",
-              enum: ["CLEAR", "CONFLICT_DETECTED", "RESOLVED"],
             },
             notes: { type: "string" },
             createdAt: { type: "string", format: "date-time" },
@@ -500,10 +542,28 @@ const options = {
             pilot: { type: "string", example: "507f1f77bcf86cd799439011", description: "ObjectId of the pilot" },
             status: {
               type: "string",
-              enum: ["DRAFT", "PENDING", "APPROVED", "REJECTED", "CANCELLED"],
-              example: "DRAFT",
+              enum: ["ACTIVE", "INACTIVE"],
+              example: "ACTIVE",
             },
             priority: { type: "integer", example: 1 },
+            batteryPercentageUsed: {
+              type: "number",
+              example: 75,
+            },
+            estimatedFlightTime: {
+              type: "number",
+              example: 1800,
+            },
+            batteryUsagePercent: {
+              type: "number",
+              example: 75,
+              description: "Alias of batteryPercentageUsed for FE convenience.",
+            },
+            estimatedFlightTimeMinutes: {
+              type: "number",
+              example: 1800,
+              description: "Alias of estimatedFlightTime for FE convenience.",
+            },
             waypoints: {
               type: "array",
               items: { $ref: "#/components/schemas/Waypoint" },
@@ -518,11 +578,6 @@ const options = {
                   example: [[106.6297, 10.8231], [106.64, 10.83]],
                 },
               },
-            },
-            conflictStatus: {
-              type: "string",
-              enum: ["CLEAR", "CONFLICT_DETECTED", "RESOLVED"],
-              example: "CLEAR",
             },
             notes: { type: "string", example: "Test notes" },
             createdAt: { type: "string", format: "date-time" },

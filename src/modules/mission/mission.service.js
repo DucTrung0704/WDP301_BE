@@ -42,6 +42,8 @@ async function getMissionForUser(missionId, userId, role) {
 function getMissionFlightPlanPopulateOptions() {
     return {
         path: "flightPlan",
+        select:
+            "drone pilot status priority waypoints routeGeometry batteryPercentageUsed estimatedFlightTime notes createdAt updatedAt",
         populate: {
             path: "drone",
             select: "droneId serialNumber model owner ownerType maxAltitude status route createdAt updatedAt",
@@ -128,7 +130,7 @@ async function assertNoDroneOverlapAcrossMissions({
         const conflictingMissionNames = conflictingPlans
             .map((mp) => mp.mission?.name || "Unknown")
             .join(", ");
-        
+
         throw createValidationError(
             `Drone is already scheduled in another mission(s) at the same time: [${conflictingMissionNames}]. Adjust plannedStart/plannedEnd or use a different drone.`,
         );
