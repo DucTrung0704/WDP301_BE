@@ -32,14 +32,23 @@
  *                   nullable: true
  *                 status:
  *                   type: string
+ *                   description: RUNNING | STOPPING | COMPLETED | FAILED | SCHEDULED | CANCELLED | UNKNOWN | NOT_FOUND
  *                 run:
  *                   allOf:
  *                     - $ref: '#/components/schemas/SimulationRun'
  *                   nullable: true
+ *                 source:
+ *                   type: string
+ *                   nullable: true
+ *                   description: Nguồn trạng thái (RUN_MEMORY hoặc DATABASE)
+ *                 activeSessionCount:
+ *                   type: integer
+ *                   nullable: true
  *             example:
  *               hasRun: true
- *               runId: "7c378e05-d425-4a57-8f35-067be573e8be"
- *               status: "RUNNING"
+ *               runId: null
+ *               status: "SCHEDULED"
+ *               source: "DATABASE"
  *       401:
  *         description: Unauthorized
  *       403:

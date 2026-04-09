@@ -1,6 +1,8 @@
 const { spawn } = require("child_process");
 const path = require("path");
 const { randomUUID } = require("crypto");
+const mongoose = require("mongoose");
+const Mission = require("../mission/mission.model");
 const MissionPlan = require("../mission/missionPlan.model");
 const FlightSession = require("../flightSession/flightSession.model");
 const Drone = require("../../../models/drone.model");
@@ -429,19 +431,122 @@ function getSimulationStatus(runId, actor) {
   return toPublicRun(run);
 }
 
-function getMissionSimulationStatus(missionId, actor) {
-  const missionRuns = Array.from(runs.values())
-    .filter((run) => run.missionId === missionId)
-    .filter((run) => actor.role === "UTM_ADMIN" || run.userId.toString() === actor.id.toString())
-    .sort((left, right) => new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime());
-
-  if (missionRuns.length === 0) {
+function deriveMissionStatusFromPlans(plans, activeSessionCount) {
+  if (!Array.isArray(plans) || plans.length === 0) {
     return {
       hasRun: false,
       runId: null,
       status: "NOT_FOUND",
       run: null,
     };
+  }
+
+  const statuses = plans.map((plan) => plan.status);
+  const hasInProgressPlan = statuses.includes("IN_PROGRESS");
+  const hasScheduledPlan = statuses.includes("SCHEDULED");
+  const hasCompletedPlan = statuses.includes("COMPLETED");
+
+  if (activeSessionCount > 0 || hasInProgressPlan) {
+    return {
+      hasRun: true,
+      runId: null,
+      status: "RUNNING",
+      run: null,
+      source: "DATABASE",
+      activeSessionCount,
+    };
+  }
+
+  if (hasScheduledPlan) {
+    return {
+      hasRun: true,
+      runId: null,
+      status: "SCHEDULED",
+      run: null,
+      source: "DATABASE",
+    };
+  }
+
+  if (hasCompletedPlan) {
+    return {
+      hasRun: true,
+      runId: null,
+      status: "COMPLETED",
+      run: null,
+      source: "DATABASE",
+    };
+  }
+
+  if (statuses.every((status) => status === "CANCELLED")) {
+    return {
+      hasRun: true,
+      runId: null,
+      status: "CANCELLED",
+      run: null,
+      source: "DATABASE",
+    };
+  }
+
+  return {
+    hasRun: true,
+    runId: null,
+    status: "UNKNOWN",
+    run: null,
+    source: "DATABASE",
+  };
+}
+
+async function getMissionSimulationStatus(missionId, actor) {
+  const missionRuns = Array.from(runs.values())
+    .filter((run) => run.missionId === missionId)
+    .filter((run) => actor.role === "UTM_ADMIN" || run.userId.toString() === actor.id.toString())
+    .sort((left, right) => new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime());
+
+  if (missionRuns.length === 0) {
+    if (!mongoose.Types.ObjectId.isValid(missionId)) {
+      return {
+        hasRun: false,
+        runId: null,
+        status: "NOT_FOUND",
+        run: null,
+      };
+    }
+
+    const mission = await Mission.findById(missionId).select("_id createdBy");
+    if (!mission) {
+      return {
+        hasRun: false,
+        runId: null,
+        status: "NOT_FOUND",
+        run: null,
+      };
+    }
+
+    if (
+      actor.role !== "UTM_ADMIN" &&
+      mission.createdBy &&
+      mission.createdBy.toString() !== actor.id.toString()
+    ) {
+      throw makeError("Forbidden: not your mission", 403);
+    }
+
+    const plans = await MissionPlan.find({ mission: missionId }).select("_id status");
+    if (plans.length === 0) {
+      return {
+        hasRun: false,
+        runId: null,
+        status: "NOT_FOUND",
+        run: null,
+      };
+    }
+
+    const planIds = plans.map((plan) => plan._id);
+    const activeSessionCount = await FlightSession.countDocuments({
+      missionPlan: { $in: planIds },
+      status: { $in: ["STARTING", "IN_PROGRESS"] },
+    });
+
+    return deriveMissionStatusFromPlans(plans, activeSessionCount);
   }
 
   const activeRun = missionRuns.find((run) => ["RUNNING", "STOPPING"].includes(run.status));

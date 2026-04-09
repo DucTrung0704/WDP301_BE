@@ -21,11 +21,11 @@ function initializeMissionScheduler() {
         try {
             await checkAndStartScheduledMissions();
         } catch (error) {
-            console.error("❌ [Mission Scheduler] Error in scheduled check:", error.message);
+            console.error("[Mission Scheduler] Error in scheduled check:", error.message);
         }
     });
 
-    console.log("✅ [Mission Scheduler] Initialized - checking every minute");
+    console.log("[Mission Scheduler] Initialized - checking every minute");
 }
 
 /**
@@ -48,21 +48,21 @@ async function checkAndStartScheduledMissions() {
             return;
         }
 
-        console.log(`\n⏰ [Mission Scheduler] Found ${missionsToStart.length} mission(s) ready to start`);
+        console.log(`\n[Mission Scheduler] Found ${missionsToStart.length} mission(s) ready to start`);
 
         for (const missionPlan of missionsToStart) {
             try {
                 await autoStartMissionSession(missionPlan);
             } catch (error) {
                 console.error(
-                    `⚠️ [Mission Scheduler] Failed to start mission plan ${missionPlan._id}:`,
+                    `[Mission Scheduler] Failed to start mission plan ${missionPlan._id}:`,
                     error.message,
                 );
                 // Continue with next mission even if this one fails
             }
         }
     } catch (error) {
-        console.error("❌ [Mission Scheduler] Database query error:", error.message);
+        console.error("[Mission Scheduler] Database query error:", error.message);
     }
 }
 
@@ -121,7 +121,7 @@ async function autoStartMissionSession(missionPlan) {
     await drone.save();
 
     console.log(
-        `✅ [Mission Scheduler] AUTO-STARTED Mission "${mission?.name || "Unknown"}" (MissionPlan: ${missionPlanId})`,
+        `[Mission Scheduler] AUTO-STARTED Mission "${mission?.name || "Unknown"}" (MissionPlan: ${missionPlanId})`,
     );
     console.log(`   - FlightSession: ${session._id}`);
     console.log(`   - Drone: ${drone.droneId}`);
@@ -133,7 +133,7 @@ async function autoStartMissionSession(missionPlan) {
 function stopMissionScheduler() {
     if (schedulerJob) {
         schedulerJob.stop();
-        console.log("⏹️  [Mission Scheduler] Stopped");
+        console.log("[Mission Scheduler] Stopped");
     }
 }
 
