@@ -64,37 +64,6 @@ const options = {
             updatedAt: { type: "string", format: "date-time" },
           },
         },
-        RegisterRequest: {
-          type: "object",
-          required: ["email", "password"],
-          properties: {
-            email: {
-              type: "string",
-              format: "email",
-              example: "user@example.com",
-              description: "Email address of the user",
-            },
-            password: {
-              type: "string",
-              format: "password",
-              minLength: 6,
-              example: "password123",
-              description: "Password for the account",
-            },
-            fullName: {
-              type: "string",
-              example: "John Doe",
-              description: "Full name of the user (optional)",
-            },
-            role: {
-              type: "string",
-              enum: ["INDIVIDUAL_OPERATOR", "FLEET_OPERATOR"],
-              example: "INDIVIDUAL_OPERATOR",
-              description:
-                "Optional. User role when self-registering (cannot be UTM_ADMIN)",
-            },
-          },
-        },
         LoginRequest: {
           type: "object",
           required: ["email", "password"],

@@ -3,69 +3,10 @@
 
 /**
  * @swagger
- * /api/auth/register:
- *   post:
- *     summary: Đăng ký tài khoản mới
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/RegisterRequest'
- *           example:
- *             email: "user@example.com"
- *             password: "password123"
- *             fullName: "John Doe"
- *             role: "FLEET_OPERATOR"
- *     responses:
- *       201:
- *         description: Đăng ký thành công
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AuthResponse'
- *             example:
- *               token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
- *               refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
- *               user:
- *                 _id: "507f1f77bcf86cd799439011"
- *                 email: "user@example.com"
- *                 profile:
- *                   fullName: "John Doe"
- *                 role: "INDIVIDUAL_OPERATOR"
- *                 status: "active"
- *       400:
- *         description: Thiếu thông tin bắt buộc
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *             example:
- *               message: "Missing fields"
- *       409:
- *         description: Email đã tồn tại
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *             example:
- *               message: "Email already exists"
- *       500:
- *         description: Lỗi server
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *             example:
- *               message: "Register failed"
- */
-
-/**
- * @swagger
  * /api/auth/login:
  *   post:
- *     summary: Đăng nhập vào hệ thống
+ *     summary: Đăng nhập local account
+ *     description: Chỉ cho phép local account đã xác minh email
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -102,13 +43,13 @@
  *             example:
  *               message: "Invalid credentials"
  *       403:
- *         description: Tài khoản bị vô hiệu hóa
+ *         description: Tài khoản bị vô hiệu hóa hoặc chưa xác minh email
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  *             example:
- *               message: "Account disabled"
+ *               message: "Email is not verified"
  *       500:
  *         description: Lỗi server
  *         content:
@@ -3695,14 +3636,10 @@
  *               idToken:
  *                 type: string
  *                 description: Google ID Token từ Google OAuth2
- *               fullName:
- *                 type: string
- *                 description: Tên đầy đủ (optional, nếu mới tạo account)
  *             required:
  *               - idToken
  *           example:
  *             idToken: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
- *             fullName: "John Doe"
  *     responses:
  *       200:
  *         description: Đăng nhập thành công (email đã verified)
@@ -3758,9 +3695,9 @@
  *             example:
  *               requiresEmailVerification: true
  *               email: "user@example.com"
- *               message: "Verification code sent to email"
+ *               message: "Verification code sent to your email"
  *       400:
- *         description: Invalid or expired idToken
+ *         description: Thiếu Google token
  *       500:
  *         description: Lỗi server
  */
@@ -3870,14 +3807,169 @@
  *               properties:
  *                 message:
  *                   type: string
- *                 retryAfter:
+ *                 retryAfterSeconds:
  *                   type: number
  *                   description: Giây cần chờ
  *             example:
- *               message: "Too many requests. Please try again later"
- *               retryAfter: 45
+ *               message: "Please wait before requesting a new verification code"
+ *               retryAfterSeconds: 45
  *       404:
  *         description: Email không tồn tại
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/auth/gmail/register:
+ *   post:
+ *     summary: Đăng ký bằng Gmail + mật khẩu và gửi mã OTP xác minh
+ *     description: Tạo local account cho email @gmail.com, gửi mã OTP qua email và yêu cầu xác minh trước khi login. Nếu email đã tồn tại bằng Google OAuth, hệ thống sẽ link thêm local login vào cùng tài khoản.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "example@gmail.com"
+ *               password:
+ *                 type: string
+ *                 minLength: 8
+ *                 example: "password123"
+ *               fullName:
+ *                 type: string
+ *                 example: "John Doe"
+ *               role:
+ *                 type: string
+ *                 enum: [INDIVIDUAL_OPERATOR, FLEET_OPERATOR]
+ *                 example: "INDIVIDUAL_OPERATOR"
+ *             required:
+ *               - email
+ *               - password
+ *     responses:
+ *       200:
+ *         description: Đã link local login vào tài khoản hiện có (không cần verify thêm)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 email:
+ *                   type: string
+ *                 linkedWithGoogle:
+ *                   type: boolean
+ *                 requiresEmailVerification:
+ *                   type: boolean
+ *             example:
+ *               message: "Local login has been enabled for this Gmail account"
+ *               email: "example@gmail.com"
+ *               linkedWithGoogle: true
+ *               requiresEmailVerification: false
+ *       202:
+ *         description: Đã gửi OTP xác minh qua email
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 email:
+ *                   type: string
+ *                 linkedWithGoogle:
+ *                   type: boolean
+ *                 requiresEmailVerification:
+ *                   type: boolean
+ *                 expiresInSeconds:
+ *                   type: number
+ *             example:
+ *               message: "Verification code sent to your email"
+ *               email: "example@gmail.com"
+ *               linkedWithGoogle: false
+ *               requiresEmailVerification: true
+ *               expiresInSeconds: 600
+ *       400:
+ *         description: Input không hợp lệ hoặc email không phải Gmail
+ *       409:
+ *         description: Email đã tồn tại
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/auth/gmail/verify-email:
+ *   post:
+ *     summary: Xác minh mã OTP cho Gmail register
+ *     description: Verify mã OTP, kích hoạt account và trả về access token + refresh token
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               code:
+ *                 type: string
+ *                 description: Mã OTP gồm 6 chữ số
+ *             required:
+ *               - email
+ *               - code
+ *           example:
+ *             email: "example@gmail.com"
+ *             code: "123456"
+ *     responses:
+ *       200:
+ *         description: Xác minh thành công, token được cấp
+ *       400:
+ *         description: Mã OTP không hợp lệ hoặc hết hạn
+ *       404:
+ *         description: User không tồn tại
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/auth/gmail/resend-code:
+ *   post:
+ *     summary: Gửi lại mã OTP xác minh cho Gmail register
+ *     description: Gửi lại OTP với cooldown 60 giây
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *             required:
+ *               - email
+ *           example:
+ *             email: "example@gmail.com"
+ *     responses:
+ *       200:
+ *         description: OTP đã được gửi lại
+ *       400:
+ *         description: Input không hợp lệ
+ *       404:
+ *         description: User không tồn tại
+ *       429:
+ *         description: Quá giới hạn gửi lại, cần chờ
  *       500:
  *         description: Lỗi server
  */
@@ -3915,7 +4007,7 @@
  *                 message:
  *                   type: string
  *             example:
- *               message: "If an account with this email exists, password reset code has been sent"
+ *               message: "If the email exists, a reset code has been sent"
  *       429:
  *         description: Quá nhiều yêu cầu - chờ 60 giây
  *         content:
@@ -3925,11 +4017,11 @@
  *               properties:
  *                 message:
  *                   type: string
- *                 retryAfter:
+ *                 retryAfterSeconds:
  *                   type: number
  *             example:
- *               message: "Too many requests"
- *               retryAfter: 45
+ *               message: "Please wait before requesting another reset code"
+ *               retryAfterSeconds: 45
  *       500:
  *         description: Lỗi server
  */
@@ -3965,7 +4057,7 @@
  *                 message:
  *                   type: string
  *             example:
- *               message: "If an account with this email exists, password reset code has been resent"
+ *               message: "If the email exists, a reset code has been sent"
  *       429:
  *         description: Quá nhiều yêu cầu - chờ 60 giây
  *       500:
@@ -4015,7 +4107,7 @@
  *                 message:
  *                   type: string
  *             example:
- *               message: "Password reset successfully"
+ *               message: "Password reset successful"
  *       400:
  *         description: Mã không hợp lệ, password yếu, hoặc mã hết hạn (10 phút)
  *         content:
@@ -4026,7 +4118,7 @@
  *                 message:
  *                   type: string
  *             example:
- *               message: "Invalid or expired code"
+ *               message: "Invalid reset code"
  *       404:
  *         description: Email không tồn tại
  *       500:

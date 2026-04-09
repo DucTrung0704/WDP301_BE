@@ -125,6 +125,52 @@ async function sendGoogleVerificationCodeEmail({ to, fullName, code }) {
   return true;
 }
 
+async function sendRegisterVerificationCodeEmail({ to, fullName, code }) {
+  const displayName = fullName || to;
+
+  const { data, error } = await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL || "UTM System <noreply@resend.dev>",
+    to: [to],
+    subject: "Ma xac minh dang ky tai khoan - UTM System",
+    html: `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f7fb; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 32px auto; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+    .header { background: linear-gradient(135deg, #0f766e, #134e4a); color: #fff; padding: 24px; }
+    .body { padding: 24px; color: #333; }
+    .otp { font-size: 28px; letter-spacing: 6px; font-weight: 700; color: #0f766e; margin: 16px 0; }
+    .note { font-size: 13px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header"><h2>Xac minh email dang ky</h2></div>
+    <div class="body">
+      <p>Xin chao <strong>${displayName}</strong>,</p>
+      <p>Ma xac minh dang ky tai khoan cua ban la:</p>
+      <div class="otp">${code}</div>
+      <p>Ma co hieu luc trong 10 phut.</p>
+      <p class="note">Neu ban khong tao tai khoan, vui long bo qua email nay.</p>
+    </div>
+  </div>
+</body>
+</html>
+        `,
+  });
+
+  if (error) {
+    console.error("Failed to send register verification email:", error);
+    return false;
+  }
+
+  console.log("Register verification email sent:", data?.id);
+  return true;
+}
+
 async function sendPasswordResetCodeEmail({ to, fullName, code }) {
   const displayName = fullName || to;
 
@@ -174,5 +220,6 @@ async function sendPasswordResetCodeEmail({ to, fullName, code }) {
 module.exports = {
   sendPaymentSuccessEmail,
   sendGoogleVerificationCodeEmail,
+  sendRegisterVerificationCodeEmail,
   sendPasswordResetCodeEmail,
 };

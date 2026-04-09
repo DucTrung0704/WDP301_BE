@@ -5,12 +5,15 @@ const User = require("../models/user.models");
 const { OAuth2Client } = require("google-auth-library");
 const {
     sendGoogleVerificationCodeEmail,
+    sendRegisterVerificationCodeEmail,
     sendPasswordResetCodeEmail,
 } = require("../services/email.service");
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const GOOGLE_VERIFY_CODE_TTL_MS = 10 * 60 * 1000;
 const GOOGLE_VERIFY_RESEND_COOLDOWN_MS = 60 * 1000;
+const GMAIL_REGISTER_VERIFY_CODE_TTL_MS = 10 * 60 * 1000;
+const GMAIL_REGISTER_RESEND_COOLDOWN_MS = 60 * 1000;
 const PASSWORD_RESET_CODE_TTL_MS = 10 * 60 * 1000;
 const PASSWORD_RESET_RESEND_COOLDOWN_MS = 60 * 1000;
 
@@ -38,6 +41,268 @@ function issueAuthTokens(user) {
 function isStrongPassword(password) {
     return typeof password === "string" && password.length >= 8;
 }
+
+function isGmailAddress(email) {
+    return typeof email === "string" && email.toLowerCase().trim().endsWith("@gmail.com");
+}
+
+/**
+ * GMAIL REGISTER (LOCAL ACCOUNT + EMAIL OTP VERIFICATION)
+ * Frontend gửi: { email, password, fullName, role }
+ */
+exports.registerWithGmailVerification = async (req, res) => {
+    try {
+        const email = (req.body.email || "").toLowerCase().trim();
+        const { password, fullName, role } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ message: "email and password are required" });
+        }
+
+        if (!isGmailAddress(email)) {
+            return res.status(400).json({ message: "Only Gmail addresses are allowed for this method" });
+        }
+
+        if (!isStrongPassword(password)) {
+            return res.status(400).json({ message: "password must be at least 8 characters" });
+        }
+
+        const allowedRoles = ["INDIVIDUAL_OPERATOR", "FLEET_OPERATOR"];
+        let userRole = "INDIVIDUAL_OPERATOR";
+        if (role) {
+            if (!allowedRoles.includes(role)) {
+                return res.status(400).json({
+                    message:
+                        "Invalid role. Allowed: INDIVIDUAL_OPERATOR, FLEET_OPERATOR",
+                });
+            }
+            userRole = role;
+        }
+
+        const code = generateVerificationCode();
+        const now = Date.now();
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const existingUser = await User.findOne({ email }).select("+emailVerification.code +emailVerification.codeExpiresAt");
+        if (existingUser) {
+            if (existingUser.providers?.local) {
+                return res.status(409).json({
+                    message: "Email already exists",
+                    isLocalLoginEnabled: true,
+                });
+            }
+
+            existingUser.password = hashedPassword;
+            existingUser.providers = existingUser.providers || {};
+            existingUser.providers.local = true;
+            existingUser.profile = existingUser.profile || {};
+            if (!existingUser.profile.fullName && fullName) {
+                existingUser.profile.fullName = fullName;
+            }
+
+            const isAlreadyVerified = existingUser.emailVerification?.isVerified !== false;
+            if (isAlreadyVerified) {
+                existingUser.status = "active";
+                await existingUser.save();
+                return res.status(200).json({
+                    message: "Local login has been enabled for this Gmail account",
+                    email,
+                    linkedWithGoogle: !!existingUser.providers?.google?.id,
+                    requiresEmailVerification: false,
+                });
+            }
+
+            existingUser.status = "inactive";
+            existingUser.emailVerification = {
+                ...(existingUser.emailVerification || {}),
+                isVerified: false,
+                code,
+                codeExpiresAt: new Date(now + GMAIL_REGISTER_VERIFY_CODE_TTL_MS),
+                lastSentAt: new Date(now),
+            };
+
+            const sent = await sendRegisterVerificationCodeEmail({
+                to: existingUser.email,
+                fullName: existingUser.profile?.fullName,
+                code,
+            });
+
+            if (!sent) {
+                return res.status(500).json({ message: "Failed to send verification code" });
+            }
+
+            await existingUser.save();
+
+            return res.status(202).json({
+                message: "Verification code sent to your email",
+                email,
+                linkedWithGoogle: !!existingUser.providers?.google?.id,
+                requiresEmailVerification: true,
+                expiresInSeconds: Math.floor(GMAIL_REGISTER_VERIFY_CODE_TTL_MS / 1000),
+            });
+        }
+
+        const user = await User.create({
+            email,
+            password: hashedPassword,
+            providers: { local: true },
+            profile: fullName ? { fullName } : {},
+            role: userRole,
+            status: "inactive",
+            emailVerification: {
+                isVerified: false,
+                code,
+                codeExpiresAt: new Date(now + GMAIL_REGISTER_VERIFY_CODE_TTL_MS),
+                lastSentAt: new Date(now),
+            },
+        });
+
+        const sent = await sendRegisterVerificationCodeEmail({
+            to: user.email,
+            fullName: user.profile?.fullName,
+            code,
+        });
+
+        if (!sent) {
+            await User.findByIdAndDelete(user._id);
+            return res.status(500).json({ message: "Failed to send verification code" });
+        }
+
+        return res.status(202).json({
+            message: "Verification code sent to your email",
+            email,
+            requiresEmailVerification: true,
+            expiresInSeconds: Math.floor(GMAIL_REGISTER_VERIFY_CODE_TTL_MS / 1000),
+        });
+    } catch (err) {
+        console.error("Gmail register error:", err);
+        return res.status(500).json({ message: "Gmail register failed" });
+    }
+};
+
+/**
+ * GMAIL REGISTER EMAIL VERIFICATION
+ * Frontend gửi: { email, code }
+ */
+exports.verifyGmailRegisterEmail = async (req, res) => {
+    try {
+        const email = (req.body.email || "").toLowerCase().trim();
+        const code = String(req.body.code || "").trim();
+
+        if (!email || !code) {
+            return res.status(400).json({ message: "email and code are required" });
+        }
+
+        const user = await User.findOne({ email }).select("+emailVerification.code +emailVerification.codeExpiresAt");
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (!user.providers?.local || !isGmailAddress(user.email)) {
+            return res.status(400).json({ message: "This account is not registered with Gmail method" });
+        }
+
+        const verification = user.emailVerification || {};
+        if (verification.isVerified) {
+            return res.status(200).json({ message: "Email already verified" });
+        }
+
+        if (!verification.code || verification.code !== code) {
+            return res.status(400).json({ message: "Invalid verification code" });
+        }
+
+        if (!verification.codeExpiresAt || new Date(verification.codeExpiresAt).getTime() < Date.now()) {
+            return res.status(400).json({ message: "Verification code expired" });
+        }
+
+        user.emailVerification = {
+            ...(user.emailVerification || {}),
+            isVerified: true,
+            code: undefined,
+            codeExpiresAt: undefined,
+            lastSentAt: undefined,
+        };
+        user.status = "active";
+        user.lastLoginAt = new Date();
+
+        const { token, refreshToken } = issueAuthTokens(user);
+        await user.save();
+
+        return res.status(200).json({ token, refreshToken, user });
+    } catch (err) {
+        console.error("Verify Gmail register email error:", err);
+        return res.status(500).json({ message: "Gmail email verification failed" });
+    }
+};
+
+/**
+ * RESEND GMAIL REGISTER VERIFICATION CODE
+ * Frontend gửi: { email }
+ */
+exports.resendGmailRegisterCode = async (req, res) => {
+    try {
+        const email = (req.body.email || "").toLowerCase().trim();
+        if (!email) {
+            return res.status(400).json({ message: "email is required" });
+        }
+
+        const user = await User.findOne({ email }).select("+emailVerification.code +emailVerification.codeExpiresAt");
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (!user.providers?.local || !isGmailAddress(user.email)) {
+            return res.status(400).json({ message: "This account is not registered with Gmail method" });
+        }
+
+        if (user.emailVerification?.isVerified) {
+            return res.status(200).json({ message: "Email already verified" });
+        }
+
+        const lastSentAt = user.emailVerification?.lastSentAt
+            ? new Date(user.emailVerification.lastSentAt).getTime()
+            : 0;
+        const now = Date.now();
+        const cooldownRemainingMs = GMAIL_REGISTER_RESEND_COOLDOWN_MS - (now - lastSentAt);
+
+        if (cooldownRemainingMs > 0) {
+            return res.status(429).json({
+                message: "Please wait before requesting a new verification code",
+                retryAfterSeconds: Math.ceil(cooldownRemainingMs / 1000),
+            });
+        }
+
+        const code = generateVerificationCode();
+        user.emailVerification = {
+            ...(user.emailVerification || {}),
+            isVerified: false,
+            code,
+            codeExpiresAt: new Date(now + GMAIL_REGISTER_VERIFY_CODE_TTL_MS),
+            lastSentAt: new Date(now),
+        };
+
+        const sent = await sendRegisterVerificationCodeEmail({
+            to: user.email,
+            fullName: user.profile?.fullName,
+            code,
+        });
+
+        if (!sent) {
+            return res.status(500).json({ message: "Failed to send verification code" });
+        }
+
+        await user.save();
+
+        return res.status(200).json({
+            message: "Verification code resent",
+            email: user.email,
+            expiresInSeconds: Math.floor(GMAIL_REGISTER_VERIFY_CODE_TTL_MS / 1000),
+        });
+    } catch (err) {
+        console.error("Resend Gmail register verification code error:", err);
+        return res.status(500).json({ message: "Resend verification code failed" });
+    }
+};
 
 /**
  * GOOGLE LOGIN / REGISTER (Web + Mobile)
@@ -406,77 +671,6 @@ exports.resetPasswordWithCode = async (req, res) => {
 };
 
 /**
- * REGISTER
- */
-exports.register = async (req, res) => {
-    try {
-        const { email, password, fullName, role } = req.body;
-
-        if (!email || !password) {
-            return res.status(400).json({ message: "Missing fields" });
-        }
-
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(409).json({ message: "Email already exists" });
-        }
-
-        // Validate role (if provided) - chỉ cho phép 2 role ngoài UTM_ADMIN
-        const allowedRoles = ["INDIVIDUAL_OPERATOR", "FLEET_OPERATOR", "UTM_ADMIN"];
-
-        let userRole = "INDIVIDUAL_OPERATOR";
-        if (role) {
-            if (!allowedRoles.includes(role)) {
-                return res.status(400).json({
-                    message:
-                        "Invalid role. Allowed: INDIVIDUAL_OPERATOR, FLEET_OPERATOR",
-                });
-            }
-            userRole = role;
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const profileData = fullName ? { fullName } : {};
-
-        const user = await User.create({
-            email,
-            password: hashedPassword,
-            providers: { local: true },
-            profile: profileData,
-            role: userRole,
-        });
-
-        // Generate JWT access token
-        const token = jwt.sign(
-            { userId: user._id, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: "7d" }
-        );
-
-        // Generate refresh token
-        const refreshToken = jwt.sign(
-            { userId: user._id },
-            process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
-            { expiresIn: "30d" }
-        );
-
-        // Store refresh token in database
-        user.refreshTokens.push(refreshToken);
-        await user.save();
-
-        res.status(201).json({
-            token,
-            refreshToken,
-            user,
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Register failed" });
-    }
-};
-
-/**
  * LOGIN
  */
 exports.login = async (req, res) => {
@@ -501,6 +695,15 @@ exports.login = async (req, res) => {
 
         if (user.status !== "active") {
             return res.status(403).json({ message: "Account disabled" });
+        }
+
+        const isEmailVerified = user.emailVerification?.isVerified !== false;
+        if (!isEmailVerified) {
+            return res.status(403).json({
+                message: "Email is not verified",
+                requiresEmailVerification: true,
+                email: user.email,
+            });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
