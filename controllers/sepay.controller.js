@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const PaymentModel = require("../models/payment.model");
 const UserModel = require("../models/user.models");
+const DroneModel = require("../models/drone.model");
 
 const BANK_ACCOUNT = "09479004233";
 const BANK_NAME = "TPBank";
@@ -108,6 +109,11 @@ exports.webhook = async (req, res) => {
                                 role: "FLEET_OPERATOR",
                                 premium_expires_at: baseDate
                             });
+
+                            await DroneModel.updateMany(
+                                { owner: customer_id, ownerType: "INDIVIDUAL" },
+                                { $set: { ownerType: "FLEET" } },
+                            );
                         }
                     }
 

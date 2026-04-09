@@ -142,7 +142,17 @@ exports.updateUserByAdmin = async (req, res) => {
                         "Invalid role. Allowed: INDIVIDUAL_OPERATOR, FLEET_OPERATOR",
                 });
             }
+
+            const isUpgradeToFleet =
+                user.role === "INDIVIDUAL_OPERATOR" && role === "FLEET_OPERATOR";
             user.role = role;
+
+            if (isUpgradeToFleet) {
+                await Drone.updateMany(
+                    { owner: user._id, ownerType: "INDIVIDUAL" },
+                    { $set: { ownerType: "FLEET" } },
+                );
+            }
         }
 
         await user.save();
@@ -165,11 +175,18 @@ exports.updateUserByAdmin = async (req, res) => {
 exports.deleteUserByAdmin = async (req, res) => {
     try {
         const { id } = req.params;
-        const user = await User.findByIdAndDelete(id);
+        const user = await User.findById(id);
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
-        res.json({ message: "User deleted successfully" });
+
+        const droneDeleteResult = await Drone.deleteMany({ owner: user._id });
+        await User.findByIdAndDelete(id);
+
+        res.json({
+            message: "User deleted successfully",
+            deletedDrones: droneDeleteResult.deletedCount || 0,
+        });
     } catch (err) {
         console.error("deleteUserByAdmin error:", err);
         res.status(500).json({ message: "Failed to delete user" });
