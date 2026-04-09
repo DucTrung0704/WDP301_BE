@@ -80,6 +80,43 @@
  *                       remainingDistanceKm: 1.54
  *                       totalDistanceMeters: 4280
  *                       progressPercent: 64.02
+ *             examples:
+ *               runMemory:
+ *                 summary: Run đang chạy trong bộ nhớ tiến trình
+ *                 value:
+ *                   hasRun: true
+ *                   runId: "a32abdd3-f865-45b4-89c9-6881b1f852b3"
+ *                   status: "RUNNING"
+ *                   source: "RUN_MEMORY"
+ *                   activeSessionCount: 1
+ *                   run:
+ *                     runId: "a32abdd3-f865-45b4-89c9-6881b1f852b3"
+ *                     missionId: "69d7f116dc8b8daa13ad9fcf"
+ *                     userId: "69ae3eb21ee7090a73e6ecd6"
+ *                     status: "RUNNING"
+ *                     startedAt: "2026-04-09T18:38:32.079Z"
+ *                     endedAt: null
+ *                     exitCode: null
+ *                     signal: null
+ *                     cleanup: null
+ *                     pid: 31688
+ *                     command: "node scripts/simulate-mission.js --missionId=69d7f116dc8b8daa13ad9fcf --token=[REDACTED] --mode=normal --timeScale=1 --tickMs=1000"
+ *                     options:
+ *                       mode: "normal"
+ *                       continuous: false
+ *                       timeScale: 1
+ *                       tickMs: 1000
+ *                     logs: []
+ *                     live:
+ *                       source: "DATABASE"
+ *                       missionId: "69d7f116dc8b8daa13ad9fcf"
+ *                       sessions: 1
+ *                       drones:
+ *                         - missionPlanId: "69d7f2b21ee7090a73e5c203"
+ *                           sessionStatus: "IN_PROGRESS"
+ *                           batteryLevel: 74
+ *                           remainingDistanceMeters: 1540
+ *                           remainingDistanceKm: 1.54
  *       401:
  *         description: Unauthorized
  *       403:

@@ -413,6 +413,29 @@ function calculateRemainingDistance(routeMeta, lat, lng) {
   };
 }
 
+function calculateFallbackDistance(routeMeta, sessionStatus) {
+  if (!routeMeta) {
+    return null;
+  }
+
+  if (["COMPLETED"].includes(sessionStatus)) {
+    return {
+      remainingDistanceMeters: 0,
+      remainingDistanceKm: 0,
+      totalDistanceMeters: Math.round(routeMeta.totalDistanceMeters),
+      progressPercent: 100,
+    };
+  }
+
+  // For RUNNING/STARTING or sessions without telemetry yet, expose full route as remaining.
+  return {
+    remainingDistanceMeters: Math.round(routeMeta.totalDistanceMeters),
+    remainingDistanceKm: Number((routeMeta.totalDistanceMeters / 1000).toFixed(3)),
+    totalDistanceMeters: Math.round(routeMeta.totalDistanceMeters),
+    progressPercent: 0,
+  };
+}
+
 async function startMissionSimulation({ missionId, token, actor, options }) {
   if (!missionId) throw makeError("missionId is required", 400);
   if (!token) throw makeError("Bearer token is required", 401);
@@ -677,8 +700,12 @@ async function buildDatabaseRunSnapshot(missionId, plans) {
       null;
     const routeMeta = routeMetaByFlightPlanId.get(String(session.flightPlan?._id || session.flightPlan));
     const distanceMetrics = telemetry
-      ? calculateRemainingDistance(routeMeta, coords.length >= 2 ? coords[1] : null, coords.length >= 2 ? coords[0] : null)
-      : null;
+      ? calculateRemainingDistance(
+        routeMeta,
+        coords.length >= 2 ? coords[1] : null,
+        coords.length >= 2 ? coords[0] : null,
+      )
+      : calculateFallbackDistance(routeMeta, session.status);
 
     return {
       missionPlanId: session.missionPlan,
@@ -786,11 +813,16 @@ async function getMissionSimulationStatus(missionId, actor) {
 
   const plans = await MissionPlan.find({ mission: missionId }).select("_id flightPlan");
   const runSnapshot = await buildDatabaseRunSnapshot(missionId, plans);
+  const activeSessionCount = runSnapshot.drones.filter((drone) =>
+    ["STARTING", "IN_PROGRESS"].includes(drone.sessionStatus),
+  ).length;
 
   return {
     hasRun: true,
     runId: selectedRun.runId,
     status: selectedRun.status,
+    source: "RUN_MEMORY",
+    activeSessionCount,
     run: {
       ...toPublicRun(selectedRun),
       live: runSnapshot,
