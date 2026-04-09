@@ -10,10 +10,131 @@ const { getNearbyDrones } = require("../modules/nearby/nearby.service");
 
 const NEARBY_RADIUS_M = parseInt(process.env.NEARBY_RADIUS_M) || 1000;
 const NEARBY_PUSH_MS = parseInt(process.env.NEARBY_PUSH_INTERVAL_MS) || 1000;
+const ROUTE_CACHE_TTL_MS = parseInt(process.env.WS_ROUTE_CACHE_TTL_MS) || 60 * 1000;
 
 let io; // Hold the socket.io server instance
 let redisReady = false; // Redis connectivity flag
 const TELEMETRY_DIAG_LOG = process.env.TELEMETRY_DIAG_LOG !== "false";
+const sessionRouteCache = new Map();
+
+function toRadians(value) {
+  return (Number(value) * Math.PI) / 180;
+}
+
+function haversineDistanceMeters(lat1, lng1, lat2, lng2) {
+  const earthRadiusMeters = 6371000;
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2;
+
+  return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function buildRouteCoordinates(flightPlan) {
+  if (
+    flightPlan?.routeGeometry?.type === "LineString" &&
+    Array.isArray(flightPlan.routeGeometry.coordinates) &&
+    flightPlan.routeGeometry.coordinates.length >= 2
+  ) {
+    return flightPlan.routeGeometry.coordinates;
+  }
+
+  if (Array.isArray(flightPlan?.waypoints) && flightPlan.waypoints.length >= 2) {
+    return [...flightPlan.waypoints]
+      .sort((left, right) => left.sequenceNumber - right.sequenceNumber)
+      .map((waypoint) => [waypoint.longitude, waypoint.latitude]);
+  }
+
+  return [];
+}
+
+function buildRemainingDistanceMeta(coords) {
+  if (!Array.isArray(coords) || coords.length < 2) {
+    return null;
+  }
+
+  const cumulativeFromIndex = new Array(coords.length).fill(0);
+  for (let index = coords.length - 2; index >= 0; index -= 1) {
+    const [lng1, lat1] = coords[index];
+    const [lng2, lat2] = coords[index + 1];
+    cumulativeFromIndex[index] =
+      cumulativeFromIndex[index + 1] + haversineDistanceMeters(lat1, lng1, lat2, lng2);
+  }
+
+  return {
+    coords,
+    cumulativeFromIndex,
+    totalDistanceMeters: cumulativeFromIndex[0],
+  };
+}
+
+async function getRouteMetaForSession(sessionId) {
+  const cached = sessionRouteCache.get(sessionId);
+  const now = Date.now();
+  if (cached && now - cached.cachedAt < ROUTE_CACHE_TTL_MS) {
+    return cached.meta;
+  }
+
+  const session = await FlightSession.findById(sessionId)
+    .select("flightPlan")
+    .populate({
+      path: "flightPlan",
+      select: "routeGeometry waypoints",
+    })
+    .lean();
+
+  const coordinates = buildRouteCoordinates(session?.flightPlan);
+  const meta = buildRemainingDistanceMeta(coordinates);
+  sessionRouteCache.set(sessionId, { meta, cachedAt: now });
+  return meta;
+}
+
+async function getRemainingDistanceForTelemetry(sessionId, lat, lng) {
+  if (!sessionId) {
+    return null;
+  }
+
+  const currentLat = Number(lat);
+  const currentLng = Number(lng);
+  if (!Number.isFinite(currentLat) || !Number.isFinite(currentLng)) {
+    return null;
+  }
+
+  const routeMeta = await getRouteMetaForSession(sessionId);
+  if (!routeMeta) {
+    return null;
+  }
+
+  let nearestIndex = 0;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  routeMeta.coords.forEach(([coordLng, coordLat], index) => {
+    const distance = haversineDistanceMeters(currentLat, currentLng, coordLat, coordLng);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
+    }
+  });
+
+  const remainingDistanceMeters = nearestDistance + routeMeta.cumulativeFromIndex[nearestIndex];
+
+  return {
+    remainingDistanceMeters: Math.max(0, Math.round(remainingDistanceMeters)),
+    remainingDistanceKm: Number((remainingDistanceMeters / 1000).toFixed(3)),
+    totalDistanceMeters: Math.round(routeMeta.totalDistanceMeters),
+    progressPercent:
+      routeMeta.totalDistanceMeters > 0
+        ? Number(
+          (
+            ((routeMeta.totalDistanceMeters - remainingDistanceMeters) / routeMeta.totalDistanceMeters) *
+            100
+          ).toFixed(2),
+        )
+        : 0,
+  };
+}
 
 function diagTelemetry(branch, info = {}) {
   if (!TELEMETRY_DIAG_LOG) return;
@@ -226,6 +347,15 @@ function init(httpServer) {
 
         // ========== BROADCAST TELEMETRY TO SESSION WATCHERS ==========
         // Re-broadcast to all clients watching this session room (dashboard)
+        let routeMetrics = null;
+        if (sessionId) {
+          routeMetrics = await getRemainingDistanceForTelemetry(sessionId, lat, lng)
+            .catch((err) => {
+              console.error(`Failed to compute remaining distance for session ${sessionId}:`, err.message);
+              return null;
+            });
+        }
+
         const telemetryPayload = {
           droneId,
           missionId,
@@ -237,6 +367,7 @@ function init(httpServer) {
           heading: heading || 0,
           batteryLevel: batteryLevel || 0,
           timestamp: telemetryTs,
+          ...(routeMetrics || {}),
         };
 
         if (sessionId) {

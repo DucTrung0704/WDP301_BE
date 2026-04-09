@@ -1,6 +1,8 @@
 const Mission = require("./mission.model");
 const MissionPlan = require("./missionPlan.model");
 const FlightPlan = require("../flightPlan/flightPlan.model");
+const FlightSession = require("../flightSession/flightSession.model");
+const { checkAndStartScheduledMissions } = require("./mission.scheduler");
 const {
     pairwiseConflictCheck,
     segmentationConflictCheck,
@@ -159,12 +161,79 @@ async function listMissions(userId, role) {
         .sort({ createdAt: -1 });
 }
 
+async function syncMissionPlanStatusesFromSessions(missionPlans) {
+    if (!Array.isArray(missionPlans) || missionPlans.length === 0) {
+        return;
+    }
+
+    const planIds = missionPlans.map((plan) => plan._id);
+    const sessions = await FlightSession.find({ missionPlan: { $in: planIds } })
+        .select("missionPlan status")
+        .lean();
+
+    const sessionStatusByPlan = new Map();
+    sessions.forEach((session) => {
+        const key = session.missionPlan?.toString();
+        if (!key) return;
+
+        const current = sessionStatusByPlan.get(key) || {
+            hasActive: false,
+            hasCompleted: false,
+        };
+
+        if (["STARTING", "IN_PROGRESS"].includes(session.status)) {
+            current.hasActive = true;
+        }
+        if (["COMPLETED", "ABORTED", "EMERGENCY_LANDED"].includes(session.status)) {
+            current.hasCompleted = true;
+        }
+
+        sessionStatusByPlan.set(key, current);
+    });
+
+    const now = new Date();
+    const writes = [];
+
+    missionPlans.forEach((plan) => {
+        const key = plan._id.toString();
+        const state = sessionStatusByPlan.get(key);
+
+        if (state?.hasActive && plan.status !== "IN_PROGRESS") {
+            plan.status = "IN_PROGRESS";
+            writes.push(plan.save());
+            return;
+        }
+
+        if ((state?.hasCompleted || plan.plannedEnd <= now) && plan.status !== "COMPLETED") {
+            plan.status = "COMPLETED";
+            writes.push(plan.save());
+        }
+    });
+
+    if (writes.length > 0) {
+        await Promise.all(writes);
+    }
+}
+
 async function getMissionDetail(missionId, userId, role) {
     const mission = await getMissionForUser(missionId, userId, role);
+
+    // Self-heal status transitions so UI doesn't depend solely on cron timing.
+    try {
+        await checkAndStartScheduledMissions();
+    } catch (err) {
+        console.error("Mission status sync on read failed:", err.message);
+    }
 
     const missionPlans = await MissionPlan.find({ mission: mission._id })
         .populate(getMissionFlightPlanPopulateOptions())
         .sort({ order: 1, plannedStart: 1, createdAt: 1 });
+
+    try {
+        await syncMissionPlanStatusesFromSessions(missionPlans);
+    } catch (err) {
+        console.error("Mission plan status sync from sessions failed:", err.message);
+    }
 
     return { mission, missionPlans };
 }
