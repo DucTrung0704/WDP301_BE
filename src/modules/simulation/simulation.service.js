@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const Mission = require("../mission/mission.model");
 const MissionPlan = require("../mission/missionPlan.model");
 const FlightSession = require("../flightSession/flightSession.model");
+const Telemetry = require("../telemetry/telemetry.model");
 const Drone = require("../../../models/drone.model");
 
 const SIM_SCRIPT_PATH = path.join(process.cwd(), "scripts", "simulate-mission.js");
@@ -442,9 +443,9 @@ function deriveMissionStatusFromPlans(plans, activeSessionCount) {
   }
 
   const statuses = plans.map((plan) => plan.status);
-  const hasInProgressPlan = statuses.includes("IN_PROGRESS");
-  const hasScheduledPlan = statuses.includes("SCHEDULED");
-  const hasCompletedPlan = statuses.includes("COMPLETED");
+  const hasInProgressPlan = statuses.includes("IN_PROGRESS") || statuses.includes("in_progress");
+  const hasScheduledPlan = statuses.includes("SCHEDULED") || statuses.includes("scheduled");
+  const hasCompletedPlan = statuses.includes("COMPLETED") || statuses.includes("completed");
 
   if (activeSessionCount > 0 || hasInProgressPlan) {
     return {
@@ -493,6 +494,95 @@ function deriveMissionStatusFromPlans(plans, activeSessionCount) {
     status: "UNKNOWN",
     run: null,
     source: "DATABASE",
+  };
+}
+
+async function buildDatabaseRunSnapshot(missionId, planIds) {
+  if (!Array.isArray(planIds) || planIds.length === 0) {
+    return {
+      source: "DATABASE",
+      missionId,
+      drones: [],
+    };
+  }
+
+  const sessions = await FlightSession.find({ missionPlan: { $in: planIds } })
+    .select("_id missionPlan drone status actualStart actualEnd createdAt")
+    .populate("drone", "droneId status")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const latestSessionByPlan = new Map();
+  sessions.forEach((session) => {
+    const key = session.missionPlan?.toString();
+    if (!key || latestSessionByPlan.has(key)) return;
+    latestSessionByPlan.set(key, session);
+  });
+
+  const latestSessions = Array.from(latestSessionByPlan.values());
+  const sessionIds = latestSessions.map((session) => session._id);
+
+  let latestTelemetryBySession = new Map();
+  if (sessionIds.length > 0) {
+    const latestTelemetryRows = await Telemetry.aggregate([
+      { $match: { flightSession: { $in: sessionIds } } },
+      { $sort: { timestamp: -1 } },
+      {
+        $group: {
+          _id: "$flightSession",
+          timestamp: { $first: "$timestamp" },
+          location: { $first: "$location.coordinates" },
+          altitude: { $first: "$altitude" },
+          speed: { $first: "$speed" },
+          heading: { $first: "$heading" },
+          batteryLevel: { $first: "$batteryLevel" },
+        },
+      },
+    ]);
+
+    latestTelemetryBySession = new Map(
+      latestTelemetryRows.map((row) => [String(row._id), row]),
+    );
+  }
+
+  const drones = latestSessions.map((session) => {
+    const telemetry = latestTelemetryBySession.get(String(session._id)) || null;
+    const coords = Array.isArray(telemetry?.location) ? telemetry.location : [];
+    const batteryLevel = telemetry?.batteryLevel ?? null;
+
+    return {
+      missionPlanId: session.missionPlan,
+      flightSessionId: session._id,
+      sessionStatus: session.status,
+      actualStart: session.actualStart,
+      actualEnd: session.actualEnd,
+      batteryLevel,
+      battery: batteryLevel,
+      drone: {
+        _id: typeof session.drone === "object" ? session.drone?._id : session.drone,
+        droneId: typeof session.drone === "object" ? session.drone?.droneId : null,
+        status: typeof session.drone === "object" ? session.drone?.status : null,
+      },
+      telemetry: telemetry
+        ? {
+          timestamp: telemetry.timestamp,
+          lat: coords.length >= 2 ? coords[1] : null,
+          lng: coords.length >= 2 ? coords[0] : null,
+          altitude: telemetry.altitude ?? null,
+          speed: telemetry.speed ?? null,
+          heading: telemetry.heading ?? null,
+          batteryLevel,
+          battery: batteryLevel,
+        }
+        : null,
+    };
+  });
+
+  return {
+    source: "DATABASE",
+    missionId,
+    drones,
+    sessions: drones.length,
   };
 }
 
@@ -546,17 +636,30 @@ async function getMissionSimulationStatus(missionId, actor) {
       status: { $in: ["STARTING", "IN_PROGRESS"] },
     });
 
-    return deriveMissionStatusFromPlans(plans, activeSessionCount);
+    const derived = deriveMissionStatusFromPlans(plans, activeSessionCount);
+    const runSnapshot = await buildDatabaseRunSnapshot(missionId, planIds);
+
+    return {
+      ...derived,
+      run: runSnapshot,
+    };
   }
 
   const activeRun = missionRuns.find((run) => ["RUNNING", "STOPPING"].includes(run.status));
   const selectedRun = activeRun || missionRuns[0];
 
+  const plans = await MissionPlan.find({ mission: missionId }).select("_id");
+  const planIds = plans.map((plan) => plan._id);
+  const runSnapshot = await buildDatabaseRunSnapshot(missionId, planIds);
+
   return {
     hasRun: true,
     runId: selectedRun.runId,
     status: selectedRun.status,
-    run: toPublicRun(selectedRun),
+    run: {
+      ...toPublicRun(selectedRun),
+      live: runSnapshot,
+    },
   };
 }
 

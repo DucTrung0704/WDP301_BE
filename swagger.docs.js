@@ -49,6 +49,29 @@
  *               runId: null
  *               status: "SCHEDULED"
  *               source: "DATABASE"
+ *               run:
+ *                 source: "DATABASE"
+ *                 missionId: "67d7d4dedae010e8b0f1229"
+ *                 sessions: 1
+ *                 drones:
+ *                   - missionPlanId: "67d7d3b1f4956dd627b2d68a"
+ *                     flightSessionId: "67d7d4f6f4956dd627b2d910"
+ *                     sessionStatus: "IN_PROGRESS"
+ *                     batteryLevel: 74
+ *                     battery: 74
+ *                     drone:
+ *                       _id: "67d34ac4956dd627b2d657a"
+ *                       droneId: "test auto 1"
+ *                       status: "FLYING"
+ *                     telemetry:
+ *                       timestamp: "2026-04-10T00:18:22.510Z"
+ *                       lat: 10.7769
+ *                       lng: 106.7009
+ *                       altitude: 120
+ *                       speed: 10
+ *                       heading: 90
+ *                       batteryLevel: 74
+ *                       battery: 74
  *       401:
  *         description: Unauthorized
  *       403:
