@@ -278,3 +278,40 @@ exports.getRevenueStatistics = async (req, res) => {
     }
 };
 
+exports.getAllTransaction = async (req, res) => {
+    try {
+        const [revenueResult, totalTransactions, totalPending, totalSuccess] = await Promise.all([
+            PaymentModel.aggregate([
+                { $match: { status: "SUCCESS" } },
+                { $group: { _id: null, total: { $sum: "$order_amount" } } }
+            ]),
+
+            PaymentModel.countDocuments(),
+
+            PaymentModel.countDocuments({ status: "PENDING" }),
+
+            PaymentModel.countDocuments({ status: "SUCCESS" })
+        ]);
+
+        const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total : 0;
+
+        return res.status(200).json({
+            success: true,
+            code: 200,
+            data: {
+                totalRevenue,
+                totalTransactions,
+                totalPending,
+                totalSuccess
+            }
+        });
+    } catch (e) {
+        console.error("Lỗi khi lấy tổng quan giao dịch:", e);
+        return res.status(500).json({
+            success: false,
+            code: 500,
+            message: "Lỗi hệ thống khi lấy dữ liệu tổng quan giao dịch",
+            error: e.message
+        });
+    }
+}
