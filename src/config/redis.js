@@ -1,5 +1,8 @@
 const redis = require("redis");
 
+let baseConnectPromise = null;
+let streamConnectPromise = null;
+
 /**
  * Redis Client Configuration
  * Used for caching + telemetry streaming (Redis Streams)
@@ -20,28 +23,83 @@ const redisClient = redis.createClient({
     db: parseInt(process.env.REDIS_DB || "0"),
 });
 
-redisClient.on("error", (err) => {
-    console.error("❌ Redis error:", err);
-});
+function attachRedisEventLogging(client, label) {
+    client.on("error", (err) => {
+        console.error(`[Redis:${label}] error:`, err.message || err);
+    });
 
-redisClient.on("connect", () => {
-    console.log("✅ Redis connected");
-});
+    client.on("connect", () => {
+        console.log(`[Redis:${label}] connected`);
+    });
 
-redisClient.on("reconnecting", () => {
-    console.log("🔄 Redis reconnecting...");
-});
+    client.on("reconnecting", () => {
+        console.log(`[Redis:${label}] reconnecting...`);
+    });
+
+    client.on("ready", () => {
+        console.log(`[Redis:${label}] ready`);
+    });
+
+    client.on("end", () => {
+        console.log(`[Redis:${label}] connection closed`);
+    });
+}
 
 // Convert callback-based redis to promises for better compatibility
 const redisClientAsync = redisClient.duplicate();
+attachRedisEventLogging(redisClient, "base");
+attachRedisEventLogging(redisClientAsync, "stream");
+
+async function connectBaseClient() {
+    if (redisClient.isReady || redisClient.isOpen) {
+        return;
+    }
+
+    if (!baseConnectPromise) {
+        baseConnectPromise = redisClient
+            .connect()
+            .catch((err) => {
+                const message = err?.message || "";
+                // Ignore benign parallel-connect states.
+                if (!message.includes("Socket already opened") && !message.includes("already connecting")) {
+                    throw err;
+                }
+            })
+            .finally(() => {
+                baseConnectPromise = null;
+            });
+    }
+
+    await baseConnectPromise;
+}
+
+async function connectStreamClient() {
+    if (redisClientAsync.isReady || redisClientAsync.isOpen) {
+        return;
+    }
+
+    if (!streamConnectPromise) {
+        streamConnectPromise = redisClientAsync
+            .connect()
+            .catch((err) => {
+                const message = err?.message || "";
+                // Ignore benign parallel-connect states.
+                if (!message.includes("Socket already opened") && !message.includes("already connecting")) {
+                    throw err;
+                }
+            })
+            .finally(() => {
+                streamConnectPromise = null;
+            });
+    }
+
+    await streamConnectPromise;
+}
+
 (async () => {
     try {
-        if (!redisClient.isOpen) {
-            await redisClient.connect();
-        }
-        if (!redisClientAsync.isOpen) {
-            await redisClientAsync.connect();
-        }
+        await connectBaseClient();
+        await connectStreamClient();
     } catch (err) {
         console.error("Failed to connect Redis clients:", err);
     }
@@ -55,8 +113,8 @@ const ensureRedisReady = () => {
 };
 
 const ensureStreamClientReady = async () => {
-    if (!redisClientAsync.isOpen) {
-        await redisClientAsync.connect();
+    if (!redisClientAsync.isReady) {
+        await connectStreamClient();
     }
 };
 
