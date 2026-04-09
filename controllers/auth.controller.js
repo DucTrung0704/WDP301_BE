@@ -547,6 +547,140 @@ exports.resendGoogleVerificationCode = async (req, res) => {
 };
 
 /**
+ * GMAIL FORGOT PASSWORD - REQUEST CODE
+ * Frontend gửi: { email }
+ */
+exports.requestGmailPasswordResetCode = async (req, res) => {
+    try {
+        const email = (req.body.email || "").toLowerCase().trim();
+        if (!email) {
+            return res.status(400).json({ message: "email is required" });
+        }
+
+        if (!isGmailAddress(email)) {
+            return res.status(400).json({ message: "Only Gmail addresses are allowed for this method" });
+        }
+
+        const user = await User.findOne({ email }).select("+passwordReset.code +passwordReset.codeExpiresAt");
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (!user.providers?.local) {
+            return res.status(400).json({ message: "This account is not registered with Gmail method" });
+        }
+
+        const lastSentAt = user.passwordReset?.lastSentAt
+            ? new Date(user.passwordReset.lastSentAt).getTime()
+            : 0;
+        const now = Date.now();
+        const cooldownRemainingMs = PASSWORD_RESET_RESEND_COOLDOWN_MS - (now - lastSentAt);
+
+        if (cooldownRemainingMs > 0) {
+            return res.status(429).json({
+                message: "Please wait before requesting another reset code",
+                retryAfterSeconds: Math.ceil(cooldownRemainingMs / 1000),
+            });
+        }
+
+        const code = generateVerificationCode();
+        user.passwordReset = {
+            ...(user.passwordReset || {}),
+            code,
+            codeExpiresAt: new Date(now + PASSWORD_RESET_CODE_TTL_MS),
+            lastSentAt: new Date(now),
+        };
+
+        const sent = await sendPasswordResetCodeEmail({
+            to: user.email,
+            fullName: user.profile?.fullName,
+            code,
+        });
+
+        if (!sent) {
+            return res.status(500).json({ message: "Failed to send reset code" });
+        }
+
+        await user.save();
+
+        return res.status(200).json({
+            message: "Reset code sent to your email",
+            email: user.email,
+            expiresInSeconds: Math.floor(PASSWORD_RESET_CODE_TTL_MS / 1000),
+        });
+    } catch (err) {
+        console.error("Request Gmail password reset code error:", err);
+        return res.status(500).json({ message: "Request reset code failed" });
+    }
+};
+
+/**
+ * GMAIL FORGOT PASSWORD - RESEND CODE
+ * Frontend gửi: { email }
+ */
+exports.resendGmailPasswordResetCode = async (req, res) => {
+    return exports.requestGmailPasswordResetCode(req, res);
+};
+
+/**
+ * GMAIL FORGOT PASSWORD - RESET PASSWORD
+ * Frontend gửi: { email, code, newPassword }
+ */
+exports.resetGmailPasswordWithCode = async (req, res) => {
+    try {
+        const email = (req.body.email || "").toLowerCase().trim();
+        const code = String(req.body.code || "").trim();
+        const { newPassword } = req.body;
+
+        if (!email || !code || !newPassword) {
+            return res.status(400).json({ message: "email, code and newPassword are required" });
+        }
+
+        if (!isGmailAddress(email)) {
+            return res.status(400).json({ message: "Only Gmail addresses are allowed for this method" });
+        }
+
+        if (!isStrongPassword(newPassword)) {
+            return res.status(400).json({ message: "newPassword must be at least 8 characters" });
+        }
+
+        const user = await User.findOne({ email }).select("+passwordReset.code +passwordReset.codeExpiresAt");
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (!user.providers?.local) {
+            return res.status(400).json({ message: "This account is not registered with Gmail method" });
+        }
+
+        const passwordReset = user.passwordReset || {};
+        if (!passwordReset.code || passwordReset.code !== code) {
+            return res.status(400).json({ message: "Invalid reset code" });
+        }
+
+        if (!passwordReset.codeExpiresAt || new Date(passwordReset.codeExpiresAt).getTime() < Date.now()) {
+            return res.status(400).json({ message: "Reset code expired" });
+        }
+
+        user.password = await bcrypt.hash(newPassword, 10);
+        user.passwordReset = {
+            code: undefined,
+            codeExpiresAt: undefined,
+            lastSentAt: undefined,
+        };
+
+        // Invalidate old sessions after password reset
+        user.refreshTokens = [];
+        await user.save();
+
+        return res.status(200).json({ message: "Password reset successful" });
+    } catch (err) {
+        console.error("Reset Gmail password with code error:", err);
+        return res.status(500).json({ message: "Reset password failed" });
+    }
+};
+
+/**
  * FORGOT PASSWORD - REQUEST CODE
  * Frontend gửi: { email }
  */

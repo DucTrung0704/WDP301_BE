@@ -3976,6 +3976,130 @@
 
 /**
  * @swagger
+ * /api/auth/gmail/forgot-password/request:
+ *   post:
+ *     summary: Gmail forgot password - gửi mã OTP
+ *     description: Gửi mã OTP đặt lại mật khẩu cho tài khoản Gmail đã đăng ký local login
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *             required:
+ *               - email
+ *           example:
+ *             email: "example@gmail.com"
+ *     responses:
+ *       200:
+ *         description: Mã OTP đã được gửi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 email:
+ *                   type: string
+ *                 expiresInSeconds:
+ *                   type: number
+ *             example:
+ *               message: "Reset code sent to your email"
+ *               email: "example@gmail.com"
+ *               expiresInSeconds: 600
+ *       400:
+ *         description: Input không hợp lệ hoặc tài khoản không thuộc Gmail method
+ *       404:
+ *         description: User không tồn tại
+ *       429:
+ *         description: Quá nhiều yêu cầu
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/auth/gmail/forgot-password/resend-code:
+ *   post:
+ *     summary: Gmail forgot password - gửi lại mã OTP
+ *     description: Gửi lại mã OTP đặt lại mật khẩu cho tài khoản Gmail (cooldown 60 giây)
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *             required:
+ *               - email
+ *           example:
+ *             email: "example@gmail.com"
+ *     responses:
+ *       200:
+ *         description: Mã OTP đã được gửi
+ *       400:
+ *         description: Input không hợp lệ hoặc tài khoản không thuộc Gmail method
+ *       404:
+ *         description: User không tồn tại
+ *       429:
+ *         description: Quá nhiều yêu cầu
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/auth/gmail/forgot-password/reset:
+ *   post:
+ *     summary: Gmail forgot password - đặt lại mật khẩu bằng OTP
+ *     description: Validate OTP và cập nhật mật khẩu mới cho tài khoản Gmail local login
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               code:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 8
+ *             required:
+ *               - email
+ *               - code
+ *               - newPassword
+ *           example:
+ *             email: "example@gmail.com"
+ *             code: "123456"
+ *             newPassword: "NewPassword123"
+ *     responses:
+ *       200:
+ *         description: Đặt lại mật khẩu thành công
+ *       400:
+ *         description: OTP không hợp lệ/hết hạn hoặc input không hợp lệ
+ *       404:
+ *         description: User không tồn tại
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
  * /api/auth/forgot-password/request:
  *   post:
  *     summary: Yêu cầu đặt lại password - gửi mã OTP qua email
