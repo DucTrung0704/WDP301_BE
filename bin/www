@@ -26,6 +26,7 @@ var server = http.createServer(app);
  */
 var websocket = require("../src/config/websocket");
 websocket.init(server);
+var simulationScheduler = require("../src/modules/simulation/simulationScheduler.service");
 
 /**
  * Start mock drone simulation (global, persists to Redis)
@@ -46,6 +47,7 @@ server.on("listening", onListening);
  */
 process.on("SIGINT", async () => {
   console.log("\n📛 Received SIGINT, shutting down gracefully...");
+  simulationScheduler.stopScheduler();
   server.close(async () => {
     console.log("✅ HTTP server closed");
 
@@ -73,6 +75,7 @@ process.on("SIGINT", async () => {
 
 process.on("SIGTERM", async () => {
   console.log("\n📛 Received SIGTERM, shutting down gracefully...");
+  simulationScheduler.stopScheduler();
   server.close(async () => {
     console.log("✅ HTTP server closed");
 
@@ -146,4 +149,7 @@ function onListening() {
   var addr = server.address();
   var bind = typeof addr === "string" ? "pipe " + addr : "port " + addr.port;
   debug("Listening on " + bind);
+  if (addr && typeof addr !== "string") {
+    simulationScheduler.startScheduler({ port: addr.port });
+  }
 }

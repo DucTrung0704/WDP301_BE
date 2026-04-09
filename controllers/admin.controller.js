@@ -1,5 +1,7 @@
 const User = require("../models/user.models");
 const bcrypt = require("bcryptjs");
+const Drone = require("../models/drone.model");
+const Payment = require("../models/payment.model");
 
 /**
  * GET /api/admin/users
@@ -171,6 +173,237 @@ exports.deleteUserByAdmin = async (req, res) => {
     } catch (err) {
         console.error("deleteUserByAdmin error:", err);
         res.status(500).json({ message: "Failed to delete user" });
+    }
+};
+
+/**
+ * GET /api/admin/analytics/drones
+ * Admin xem tổng số drone trong toàn hệ thống
+ */
+exports.getDroneSystemStats = async (req, res) => {
+    try {
+        const [totalDrones, byOwnerType, drones] = await Promise.all([
+            Drone.countDocuments(),
+            Drone.aggregate([
+                {
+                    $group: {
+                        _id: "$ownerType",
+                        count: { $sum: 1 },
+                    },
+                },
+            ]),
+            Drone.find()
+                .select("droneId serialNumber model owner ownerType status createdAt")
+                .populate("owner", "email profile.fullName role")
+                .sort({ createdAt: -1 })
+                .lean(),
+        ]);
+
+        const ownerTypeStats = {
+            INDIVIDUAL: 0,
+            FLEET: 0,
+        };
+
+        byOwnerType.forEach((item) => {
+            if (item && item._id && ownerTypeStats[item._id] !== undefined) {
+                ownerTypeStats[item._id] = item.count;
+            }
+        });
+
+        const droneList = drones.map((drone) => ({
+            _id: drone._id,
+            droneId: drone.droneId,
+            serialNumber: drone.serialNumber,
+            model: drone.model,
+            name: drone.model || drone.droneId || drone.serialNumber,
+            ownerType: drone.ownerType,
+            status: drone.status,
+            createdAt: drone.createdAt,
+            owner: drone.owner
+                ? {
+                    _id: drone.owner._id,
+                    fullName: drone.owner.profile?.fullName || null,
+                    email: drone.owner.email,
+                    role: drone.owner.role,
+                }
+                : null,
+        }));
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                totalDrones,
+                byOwnerType: ownerTypeStats,
+                drones: droneList,
+            },
+        });
+    } catch (err) {
+        console.error("getDroneSystemStats error:", err);
+        return res.status(500).json({ message: "Failed to fetch drone analytics" });
+    }
+};
+
+/**
+ * GET /api/admin/analytics/fleet-operators
+ * Admin xem user đã thanh toán thành công để lên Fleet Operator và tổng tiền đã chi
+ */
+exports.getPaidFleetOperators = async (req, res) => {
+    try {
+        const paidFleetOperators = await Payment.aggregate([
+            {
+                $match: {
+                    status: "SUCCESS",
+                    customer_id: { $type: "string", $ne: "" },
+                },
+            },
+            {
+                $addFields: {
+                    customerObjectId: {
+                        $convert: {
+                            input: "$customer_id",
+                            to: "objectId",
+                            onError: null,
+                            onNull: null,
+                        },
+                    },
+                },
+            },
+            {
+                $match: {
+                    customerObjectId: { $ne: null },
+                },
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "customerObjectId",
+                    foreignField: "_id",
+                    as: "user",
+                },
+            },
+            {
+                $unwind: "$user",
+            },
+            {
+                $match: {
+                    "user.role": "FLEET_OPERATOR",
+                },
+            },
+            {
+                $group: {
+                    _id: "$user._id",
+                    email: { $first: "$user.email" },
+                    fullName: { $first: "$user.profile.fullName" },
+                    role: { $first: "$user.role" },
+                    totalSpent: { $sum: "$order_amount" },
+                    successfulPaymentCount: { $sum: 1 },
+                    firstPaymentAt: { $min: "$createdAt" },
+                    lastPaymentAt: { $max: "$createdAt" },
+                },
+            },
+            {
+                $sort: {
+                    totalSpent: -1,
+                },
+            },
+        ]);
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                totalPaidFleetOperators: paidFleetOperators.length,
+                operators: paidFleetOperators,
+            },
+        });
+    } catch (err) {
+        console.error("getPaidFleetOperators error:", err);
+        return res.status(500).json({ message: "Failed to fetch paid fleet operators" });
+    }
+};
+
+/**
+ * GET /api/admin/analytics/revenue
+ * Admin xem doanh thu theo tháng, quý, năm
+ */
+exports.getRevenueAnalytics = async (req, res) => {
+    try {
+        const successMatch = {
+            $match: { status: "SUCCESS" },
+        };
+
+        const [monthly, quarterly, yearly] = await Promise.all([
+            Payment.aggregate([
+                successMatch,
+                {
+                    $group: {
+                        _id: {
+                            year: { $year: "$createdAt" },
+                            month: { $month: "$createdAt" },
+                        },
+                        totalRevenue: { $sum: "$order_amount" },
+                        transactionCount: { $sum: 1 },
+                    },
+                },
+                {
+                    $sort: {
+                        "_id.year": -1,
+                        "_id.month": -1,
+                    },
+                },
+            ]),
+            Payment.aggregate([
+                successMatch,
+                {
+                    $group: {
+                        _id: {
+                            year: { $year: "$createdAt" },
+                            quarter: {
+                                $ceil: {
+                                    $divide: [{ $month: "$createdAt" }, 3],
+                                },
+                            },
+                        },
+                        totalRevenue: { $sum: "$order_amount" },
+                        transactionCount: { $sum: 1 },
+                    },
+                },
+                {
+                    $sort: {
+                        "_id.year": -1,
+                        "_id.quarter": -1,
+                    },
+                },
+            ]),
+            Payment.aggregate([
+                successMatch,
+                {
+                    $group: {
+                        _id: {
+                            year: { $year: "$createdAt" },
+                        },
+                        totalRevenue: { $sum: "$order_amount" },
+                        transactionCount: { $sum: 1 },
+                    },
+                },
+                {
+                    $sort: {
+                        "_id.year": -1,
+                    },
+                },
+            ]),
+        ]);
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                monthly,
+                quarterly,
+                yearly,
+            },
+        });
+    } catch (err) {
+        console.error("getRevenueAnalytics error:", err);
+        return res.status(500).json({ message: "Failed to fetch revenue analytics" });
     }
 };
 

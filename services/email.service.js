@@ -1,6 +1,118 @@
+const nodemailer = require("nodemailer");
 const { Resend } = require("resend");
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const EMAIL_PROVIDER = (process.env.EMAIL_PROVIDER || "auto").trim().toLowerCase();
+
+function getResendClient() {
+  const apiKey = (process.env.RESEND_API_KEY || "").trim();
+  if (!apiKey) return null;
+  return new Resend(apiKey);
+}
+
+function getSmtpTransport() {
+  const host = (process.env.SMTP_HOST || "").trim();
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = (process.env.SMTP_USER || "").trim();
+  const pass = (process.env.SMTP_PASS || "").trim();
+
+  if (!host || !user || !pass) return null;
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+  });
+}
+
+function getFromEmail() {
+  const smtpFrom = (process.env.SMTP_FROM_EMAIL || "").trim();
+  if (smtpFrom) return smtpFrom;
+
+  const resendFrom = (process.env.RESEND_FROM_EMAIL || "").trim();
+  if (resendFrom) return resendFrom;
+
+  return "UTM System <onboarding@resend.dev>";
+}
+
+async function sendBySmtp({ to, subject, html }) {
+  try {
+    const transport = getSmtpTransport();
+    if (!transport) {
+      return false;
+    }
+
+    await transport.sendMail({
+      from: getFromEmail(),
+      to,
+      subject,
+      html,
+    });
+
+    return true;
+  } catch (error) {
+    console.error("SMTP send error:", error);
+    return false;
+  }
+}
+
+async function sendByResend({ to, subject, html }) {
+  try {
+    const resend = getResendClient();
+    if (!resend) {
+      return false;
+    }
+
+    const { data, error } = await resend.emails.send({
+      from: getFromEmail(),
+      to: [to],
+      subject,
+      html,
+    });
+
+    if (error) {
+      console.error("Resend send error:", error);
+      return false;
+    }
+
+    console.log("Resend email sent:", data?.id);
+    return true;
+  } catch (error) {
+    console.error("Resend send error:", error);
+    return false;
+  }
+}
+
+async function sendByConsole({ to, subject, html }) {
+  const otpMatch = typeof html === "string" ? html.match(/\b\d{6}\b/) : null;
+  const otp = otpMatch ? otpMatch[0] : "N/A";
+  console.log("[EMAIL_CONSOLE_PROVIDER] to=%s subject=%s otp=%s", to, subject, otp);
+  return true;
+}
+
+async function sendEmail({ to, subject, html }) {
+  if (EMAIL_PROVIDER === "smtp") {
+    return sendBySmtp({ to, subject, html });
+  }
+
+  if (EMAIL_PROVIDER === "resend") {
+    return sendByResend({ to, subject, html });
+  }
+
+  if (EMAIL_PROVIDER === "console") {
+    return sendByConsole({ to, subject, html });
+  }
+
+  // auto mode: smtp -> resend -> console(dev only)
+  if (await sendBySmtp({ to, subject, html })) return true;
+  if (await sendByResend({ to, subject, html })) return true;
+
+  if ((process.env.NODE_ENV || "development") !== "production") {
+    return sendByConsole({ to, subject, html });
+  }
+
+  return false;
+}
 
 /**
  * @param {Object} options
@@ -18,9 +130,8 @@ async function sendPaymentSuccessEmail({ to, fullName, orderId, amount, packageN
   //     : "N/A";
   const displayName = fullName || to;
 
-  const { data, error } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL || "UTM System <noreply@resend.dev>",
-    to: [to],
+  const sent = await sendEmail({
+    to,
     subject: `✅ Thanh toán thành công – Đơn hàng ${orderId}`,
     html: `
 <!DOCTYPE html>
@@ -70,21 +181,20 @@ async function sendPaymentSuccessEmail({ to, fullName, orderId, amount, packageN
         `,
   });
 
-  if (error) {
-    console.error("❌ Lỗi gửi email Resend:", error);
+  if (!sent) {
+    console.error("Failed to send payment success email");
     return false;
   }
 
-  console.log("✅ Email thanh toán thành công đã gửi:", data?.id);
+  console.log("Payment success email sent");
   return true;
 }
 
 async function sendGoogleVerificationCodeEmail({ to, fullName, code }) {
   const displayName = fullName || to;
 
-  const { data, error } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL || "UTM System <noreply@resend.dev>",
-    to: [to],
+  const sent = await sendEmail({
+    to,
     subject: "Ma xac nhan dang ky Google - UTM System",
     html: `
 <!DOCTYPE html>
@@ -116,21 +226,20 @@ async function sendGoogleVerificationCodeEmail({ to, fullName, code }) {
         `,
   });
 
-  if (error) {
-    console.error("Failed to send Google verification email:", error);
+  if (!sent) {
+    console.error("Failed to send Google verification email");
     return false;
   }
 
-  console.log("Google verification email sent:", data?.id);
+  console.log("Google verification email sent");
   return true;
 }
 
 async function sendRegisterVerificationCodeEmail({ to, fullName, code }) {
   const displayName = fullName || to;
 
-  const { data, error } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL || "UTM System <noreply@resend.dev>",
-    to: [to],
+  const sent = await sendEmail({
+    to,
     subject: "Ma xac minh dang ky tai khoan - UTM System",
     html: `
 <!DOCTYPE html>
@@ -162,58 +271,12 @@ async function sendRegisterVerificationCodeEmail({ to, fullName, code }) {
         `,
   });
 
-  if (error) {
-    console.error("Failed to send register verification email:", error);
+  if (!sent) {
+    console.error("Failed to send register verification email");
     return false;
   }
 
-  console.log("Register verification email sent:", data?.id);
-  return true;
-}
-
-async function sendPasswordResetCodeEmail({ to, fullName, code }) {
-  const displayName = fullName || to;
-
-  const { data, error } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL || "UTM System <noreply@resend.dev>",
-    to: [to],
-    subject: "Ma dat lai mat khau - UTM System",
-    html: `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <style>
-    body { font-family: Arial, sans-serif; background: #f4f7fb; margin: 0; padding: 0; }
-    .container { max-width: 600px; margin: 32px auto; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
-    .header { background: linear-gradient(135deg, #f57c00, #ef6c00); color: #fff; padding: 24px; }
-    .body { padding: 24px; color: #333; }
-    .otp { font-size: 28px; letter-spacing: 6px; font-weight: 700; color: #ef6c00; margin: 16px 0; }
-    .note { font-size: 13px; color: #666; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header"><h2>Dat lai mat khau</h2></div>
-    <div class="body">
-      <p>Xin chao <strong>${displayName}</strong>,</p>
-      <p>Ma xac nhan dat lai mat khau cua ban la:</p>
-      <div class="otp">${code}</div>
-      <p>Ma co hieu luc trong 10 phut.</p>
-      <p class="note">Neu ban khong yeu cau dat lai mat khau, vui long bo qua email nay.</p>
-    </div>
-  </div>
-</body>
-</html>
-        `,
-  });
-
-  if (error) {
-    console.error("Failed to send password reset email:", error);
-    return false;
-  }
-
-  console.log("Password reset email sent:", data?.id);
+  console.log("Register verification email sent");
   return true;
 }
 
@@ -221,5 +284,4 @@ module.exports = {
   sendPaymentSuccessEmail,
   sendGoogleVerificationCodeEmail,
   sendRegisterVerificationCodeEmail,
-  sendPasswordResetCodeEmail,
 };

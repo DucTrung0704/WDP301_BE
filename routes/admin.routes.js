@@ -7,6 +7,9 @@ const {
     createUserByAdmin,
     updateUserByAdmin,
     deleteUserByAdmin,
+    getDroneSystemStats,
+    getPaidFleetOperators,
+    getRevenueAnalytics,
 } = require("../controllers/admin.controller");
 
 const {
@@ -54,6 +57,27 @@ router.delete(
     authenticate,
     authorizeRoles("UTM_ADMIN"),
     deleteUserByAdmin
+);
+
+router.get(
+    "/analytics/drones",
+    authenticate,
+    authorizeRoles("UTM_ADMIN"),
+    getDroneSystemStats
+);
+
+router.get(
+    "/analytics/fleet-operators",
+    authenticate,
+    authorizeRoles("UTM_ADMIN"),
+    getPaidFleetOperators
+);
+
+router.get(
+    "/analytics/revenue",
+    authenticate,
+    authorizeRoles("UTM_ADMIN"),
+    getRevenueAnalytics
 );
 
 module.exports = router;
