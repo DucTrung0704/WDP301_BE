@@ -4,6 +4,7 @@ const { randomUUID } = require("crypto");
 const mongoose = require("mongoose");
 const Mission = require("../mission/mission.model");
 const MissionPlan = require("../mission/missionPlan.model");
+const FlightPlan = require("../flightPlan/flightPlan.model");
 const FlightSession = require("../flightSession/flightSession.model");
 const Telemetry = require("../telemetry/telemetry.model");
 const Drone = require("../../../models/drone.model");
@@ -319,6 +320,99 @@ function ensureRunAccess(run, actor) {
   }
 }
 
+function toRadians(value) {
+  return (Number(value) * Math.PI) / 180;
+}
+
+function haversineDistanceMeters(lat1, lng1, lat2, lng2) {
+  const earthRadiusMeters = 6371000;
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2;
+
+  return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function buildRouteCoordinates(flightPlan) {
+  if (
+    flightPlan?.routeGeometry?.type === "LineString" &&
+    Array.isArray(flightPlan.routeGeometry.coordinates) &&
+    flightPlan.routeGeometry.coordinates.length >= 2
+  ) {
+    return flightPlan.routeGeometry.coordinates;
+  }
+
+  if (Array.isArray(flightPlan?.waypoints) && flightPlan.waypoints.length >= 2) {
+    return [...flightPlan.waypoints]
+      .sort((left, right) => left.sequenceNumber - right.sequenceNumber)
+      .map((waypoint) => [waypoint.longitude, waypoint.latitude]);
+  }
+
+  return [];
+}
+
+function buildRouteMeta(coordinates) {
+  if (!Array.isArray(coordinates) || coordinates.length < 2) {
+    return null;
+  }
+
+  const cumulativeFromIndex = new Array(coordinates.length).fill(0);
+  for (let index = coordinates.length - 2; index >= 0; index -= 1) {
+    const [lng1, lat1] = coordinates[index];
+    const [lng2, lat2] = coordinates[index + 1];
+    cumulativeFromIndex[index] =
+      cumulativeFromIndex[index + 1] + haversineDistanceMeters(lat1, lng1, lat2, lng2);
+  }
+
+  return {
+    coordinates,
+    cumulativeFromIndex,
+    totalDistanceMeters: cumulativeFromIndex[0],
+  };
+}
+
+function calculateRemainingDistance(routeMeta, lat, lng) {
+  const currentLat = Number(lat);
+  const currentLng = Number(lng);
+  if (!routeMeta || !Number.isFinite(currentLat) || !Number.isFinite(currentLng)) {
+    return null;
+  }
+
+  let nearestIndex = 0;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  routeMeta.coordinates.forEach(([coordLng, coordLat], index) => {
+    const distance = haversineDistanceMeters(currentLat, currentLng, coordLat, coordLng);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
+    }
+  });
+
+  const remainingDistanceMeters = Math.max(
+    0,
+    nearestDistance + routeMeta.cumulativeFromIndex[nearestIndex],
+  );
+
+  return {
+    remainingDistanceMeters: Math.round(remainingDistanceMeters),
+    remainingDistanceKm: Number((remainingDistanceMeters / 1000).toFixed(3)),
+    totalDistanceMeters: Math.round(routeMeta.totalDistanceMeters),
+    progressPercent:
+      routeMeta.totalDistanceMeters > 0
+        ? Number(
+          (
+            ((routeMeta.totalDistanceMeters - remainingDistanceMeters) / routeMeta.totalDistanceMeters) *
+            100
+          ).toFixed(2),
+        )
+        : 0,
+  };
+}
+
 async function startMissionSimulation({ missionId, token, actor, options }) {
   if (!missionId) throw makeError("missionId is required", 400);
   if (!token) throw makeError("Bearer token is required", 401);
@@ -525,6 +619,19 @@ async function buildDatabaseRunSnapshot(missionId, plans) {
     plans.map((plan) => [String(plan.flightPlan), String(plan._id)]),
   );
 
+  const routeFlightPlanIds = plans
+    .map((plan) => String(plan.flightPlan || ""))
+    .filter(Boolean);
+  const flightPlans = await FlightPlan.find({ _id: { $in: routeFlightPlanIds } })
+    .select("_id routeGeometry waypoints")
+    .lean();
+  const routeMetaByFlightPlanId = new Map(
+    flightPlans.map((flightPlan) => [
+      String(flightPlan._id),
+      buildRouteMeta(buildRouteCoordinates(flightPlan)),
+    ]),
+  );
+
   const latestSessionByPlan = new Map();
   sessions.forEach((session) => {
     const key =
@@ -564,19 +671,25 @@ async function buildDatabaseRunSnapshot(missionId, plans) {
     const telemetry = latestTelemetryBySession.get(String(session._id)) || null;
     const coords = Array.isArray(telemetry?.location) ? telemetry.location : [];
     const batteryLevel = telemetry?.batteryLevel ?? null;
+    const resolvedMissionPlanId =
+      session.missionPlan ||
+      planIdByFlightPlanId.get(String(session.flightPlan?._id || session.flightPlan)) ||
+      null;
+    const routeMeta = routeMetaByFlightPlanId.get(String(session.flightPlan?._id || session.flightPlan));
+    const distanceMetrics = telemetry
+      ? calculateRemainingDistance(routeMeta, coords.length >= 2 ? coords[1] : null, coords.length >= 2 ? coords[0] : null)
+      : null;
 
     return {
       missionPlanId: session.missionPlan,
-      resolvedMissionPlanId:
-        session.missionPlan ||
-        planIdByFlightPlanId.get(String(session.flightPlan?._id || session.flightPlan)) ||
-        null,
+      resolvedMissionPlanId,
       flightSessionId: session._id,
       sessionStatus: session.status,
       actualStart: session.actualStart,
       actualEnd: session.actualEnd,
       batteryLevel,
       battery: batteryLevel,
+      ...(distanceMetrics || {}),
       drone: {
         _id: typeof session.drone === "object" ? session.drone?._id : session.drone,
         droneId: typeof session.drone === "object" ? session.drone?.droneId : null,
@@ -592,6 +705,7 @@ async function buildDatabaseRunSnapshot(missionId, plans) {
           heading: telemetry.heading ?? null,
           batteryLevel,
           battery: batteryLevel,
+          ...(distanceMetrics || {}),
         }
         : null,
     };

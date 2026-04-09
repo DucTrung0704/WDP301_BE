@@ -59,6 +59,10 @@
  *                     sessionStatus: "IN_PROGRESS"
  *                     batteryLevel: 74
  *                     battery: 74
+ *                     remainingDistanceMeters: 1540
+ *                     remainingDistanceKm: 1.54
+ *                     totalDistanceMeters: 4280
+ *                     progressPercent: 64.02
  *                     drone:
  *                       _id: "67d34ac4956dd627b2d657a"
  *                       droneId: "test auto 1"
@@ -72,6 +76,10 @@
  *                       heading: 90
  *                       batteryLevel: 74
  *                       battery: 74
+ *                       remainingDistanceMeters: 1540
+ *                       remainingDistanceKm: 1.54
+ *                       totalDistanceMeters: 4280
+ *                       progressPercent: 64.02
  *       401:
  *         description: Unauthorized
  *       403:
