@@ -3,6 +3,131 @@
 
 /**
  * @swagger
+ * /api/simulations/missions/{id}/start:
+ *   post:
+ *     summary: Bắt đầu simulation cho một mission
+ *     tags: [Simulation Control]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Mission ID
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SimulationStartRequest'
+ *           example:
+ *             mode: normal
+ *             timeScale: 10
+ *             tickMs: 1000
+ *             skipSafetyCheck: false
+ *     responses:
+ *       202:
+ *         description: Simulation đã được khởi chạy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 run:
+ *                   $ref: '#/components/schemas/SimulationRun'
+ *       400:
+ *         description: Mission không hợp lệ hoặc không đủ điều kiện để start simulation
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       409:
+ *         description: Mission đang có simulation chạy hoặc drone không sẵn sàng
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/simulations/{runId}/stop:
+ *   post:
+ *     summary: Dừng một simulation run
+ *     tags: [Simulation Control]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: runId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Simulation run ID
+ *     responses:
+ *       200:
+ *         description: Yêu cầu dừng simulation đã được xử lý
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 cleanup:
+ *                   type: string
+ *                   nullable: true
+ *                 run:
+ *                   $ref: '#/components/schemas/SimulationRun'
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Không tìm thấy simulation run
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/simulations/{runId}/status:
+ *   get:
+ *     summary: Xem trạng thái một simulation run
+ *     tags: [Simulation Control]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: runId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Simulation run ID
+ *     responses:
+ *       200:
+ *         description: Trả về trạng thái hiện tại của simulation run
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 run:
+ *                   $ref: '#/components/schemas/SimulationRun'
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Không tìm thấy simulation run
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
  * /api/auth/register:
  *   post:
  *     summary: Đăng ký tài khoản local
