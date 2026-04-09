@@ -11,13 +11,19 @@ const Drone = require("../../../models/drone.model");
 
 let schedulerJob = null;
 
+function getMissionSchedulerCronExpression() {
+    const raw = String(process.env.MISSION_SCHEDULER_CRON || "*/10 * * * * *").trim();
+    return raw || "*/10 * * * * *";
+}
+
 /**
  * Initialize the mission scheduler
  * Call this once when the app starts
  */
 function initializeMissionScheduler() {
-    // Run every minute (at the start of each minute)
-    schedulerJob = cron.schedule("0 * * * * *", async () => {
+    const cronExpression = getMissionSchedulerCronExpression();
+
+    schedulerJob = cron.schedule(cronExpression, async () => {
         try {
             await checkAndStartScheduledMissions();
         } catch (error) {
@@ -25,7 +31,12 @@ function initializeMissionScheduler() {
         }
     });
 
-    console.log("[Mission Scheduler] Initialized - checking every minute");
+    // Run one tick immediately after init so due plans don't wait for next cron slot.
+    checkAndStartScheduledMissions().catch((error) => {
+        console.error("[Mission Scheduler] Initial tick failed:", error.message);
+    });
+
+    console.log(`[Mission Scheduler] Initialized - cron: ${cronExpression}`);
 }
 
 /**
@@ -37,7 +48,7 @@ async function checkAndStartScheduledMissions() {
     try {
         // Find all SCHEDULED missions whose plannedStart <= now
         const missionsToStart = await MissionPlan.find({
-            status: "SCHEDULED",
+            status: { $in: ["SCHEDULED", "scheduled"] },
             plannedStart: { $lte: now },
         })
             .populate("flightPlan")
@@ -80,14 +91,24 @@ async function autoStartMissionSession(missionPlan) {
         throw new Error(`Flight plan is ${flightPlan.status}, cannot auto-start`);
     }
 
+    const linkedActiveSession = await FlightSession.findOne({
+        missionPlan: missionPlanId,
+        status: { $in: ["STARTING", "IN_PROGRESS"] },
+    });
+
+    if (linkedActiveSession) {
+        missionPlan.status = "IN_PROGRESS";
+        await missionPlan.save();
+        console.log(
+            `[Mission Scheduler] Mission plan ${missionPlanId} already has active session ${linkedActiveSession._id}; synced status to IN_PROGRESS`,
+        );
+        return;
+    }
+
     // Validate drone exists and is IDLE
     const drone = await Drone.findById(flightPlan.drone);
     if (!drone) {
         throw new Error("Drone not found");
-    }
-
-    if (drone.status !== "IDLE") {
-        throw new Error(`Drone is ${drone.status}, cannot auto-start session`);
     }
 
     // Check if drone already has active session
@@ -97,7 +118,26 @@ async function autoStartMissionSession(missionPlan) {
     });
 
     if (existingSession) {
+        // If an active session already exists for the same flight plan, just sync mission plan status.
+        if (existingSession.flightPlan && existingSession.flightPlan.toString() === flightPlan._id.toString()) {
+            missionPlan.status = "IN_PROGRESS";
+            await missionPlan.save();
+            console.log(
+                `[Mission Scheduler] Mission plan ${missionPlanId} re-used active session ${existingSession._id}; synced status to IN_PROGRESS`,
+            );
+            return;
+        }
+
         throw new Error("Drone already has an active flight session");
+    }
+
+    if (drone.status !== "IDLE") {
+        // Recover stale drone state when no active session exists.
+        console.warn(
+            `[Mission Scheduler] Drone ${drone._id} is ${drone.status} without active session; resetting to IDLE`,
+        );
+        drone.status = "IDLE";
+        await drone.save();
     }
 
     // Create flight session
@@ -128,7 +168,7 @@ async function autoStartMissionSession(missionPlan) {
 
 async function checkAndCompleteInProgressMissions(now) {
     const missionPlansToComplete = await MissionPlan.find({
-        status: "IN_PROGRESS",
+        status: { $in: ["IN_PROGRESS", "in_progress"] },
         plannedEnd: { $lte: now },
     })
         .populate("flightPlan")
