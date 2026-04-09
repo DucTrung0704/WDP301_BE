@@ -43,24 +43,23 @@ async function checkAndStartScheduledMissions() {
             .populate("flightPlan")
             .populate("mission");
 
-        if (missionsToStart.length === 0) {
-            // No missions to start, silently return
-            return;
-        }
+        if (missionsToStart.length > 0) {
+            console.log(`\n[Mission Scheduler] Found ${missionsToStart.length} mission(s) ready to start`);
 
-        console.log(`\n[Mission Scheduler] Found ${missionsToStart.length} mission(s) ready to start`);
-
-        for (const missionPlan of missionsToStart) {
-            try {
-                await autoStartMissionSession(missionPlan);
-            } catch (error) {
-                console.error(
-                    `[Mission Scheduler] Failed to start mission plan ${missionPlan._id}:`,
-                    error.message,
-                );
-                // Continue with next mission even if this one fails
+            for (const missionPlan of missionsToStart) {
+                try {
+                    await autoStartMissionSession(missionPlan);
+                } catch (error) {
+                    console.error(
+                        `[Mission Scheduler] Failed to start mission plan ${missionPlan._id}:`,
+                        error.message,
+                    );
+                    // Continue with next mission even if this one fails
+                }
             }
         }
+
+        await checkAndCompleteInProgressMissions(now);
     } catch (error) {
         console.error("[Mission Scheduler] Database query error:", error.message);
     }
@@ -125,6 +124,61 @@ async function autoStartMissionSession(missionPlan) {
     );
     console.log(`   - FlightSession: ${session._id}`);
     console.log(`   - Drone: ${drone.droneId}`);
+}
+
+async function checkAndCompleteInProgressMissions(now) {
+    const missionPlansToComplete = await MissionPlan.find({
+        status: "IN_PROGRESS",
+        plannedEnd: { $lte: now },
+    })
+        .populate("flightPlan")
+        .populate("mission");
+
+    if (missionPlansToComplete.length === 0) {
+        return;
+    }
+
+    console.log(`\n[Mission Scheduler] Found ${missionPlansToComplete.length} mission(s) ready to complete`);
+
+    for (const missionPlan of missionPlansToComplete) {
+        try {
+            await autoCompleteMissionSession(missionPlan, now);
+        } catch (error) {
+            console.error(
+                `[Mission Scheduler] Failed to complete mission plan ${missionPlan._id}:`,
+                error.message,
+            );
+        }
+    }
+}
+
+async function autoCompleteMissionSession(missionPlan, now) {
+    const { _id: missionPlanId, mission, flightPlan } = missionPlan;
+
+    const activeSessions = await FlightSession.find({
+        missionPlan: missionPlanId,
+        status: { $in: ["STARTING", "IN_PROGRESS"] },
+    });
+
+    if (activeSessions.length > 0) {
+        for (const session of activeSessions) {
+            session.status = "COMPLETED";
+            session.actualEnd = now;
+            await session.save();
+
+            await Drone.findByIdAndUpdate(session.drone, { status: "IDLE" });
+        }
+    } else if (flightPlan?.drone) {
+        // Safety fallback: ensure drone is not stuck in FLYING when no active session exists.
+        await Drone.findByIdAndUpdate(flightPlan.drone, { status: "IDLE" });
+    }
+
+    missionPlan.status = "COMPLETED";
+    await missionPlan.save();
+
+    console.log(
+        `[Mission Scheduler] AUTO-COMPLETED Mission "${mission?.name || "Unknown"}" (MissionPlan: ${missionPlanId})`,
+    );
 }
 
 /**
