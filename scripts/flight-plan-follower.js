@@ -59,6 +59,7 @@ function lerp(a, b, t) { return a + (b - a) * t; }
 class FlightPlanFollower {
   /**
    * @param {object}  opts
+   * @param {string}  opts.missionId          - Mission ObjectId string
    * @param {string}  opts.droneId            - Drone ObjectId string (Redis key / telemetry droneId)
    * @param {string}  opts.flightPlanId       - FlightPlan ObjectId string
    * @param {Array}   opts.waypoints          - Sorted waypoints [{sequenceNumber,latitude,longitude,altitude,speed}]
@@ -74,6 +75,7 @@ class FlightPlanFollower {
    * @param {Map}     [opts.sharedPositions]  - Shared Map(droneId → {lat,lng,alt,speed,heading})
    */
   constructor(opts) {
+    this.missionId = opts.missionId;
     this.droneId = opts.droneId;
     this.flightPlanId = opts.flightPlanId;
     this.waypoints = opts.waypoints;
@@ -432,6 +434,7 @@ class FlightPlanFollower {
         if (this._socket?.connected && this.sessionId) {
           this._socket.emit('telemetry', {
             droneId: this.droneId,
+            missionId: this.missionId,
             sessionId: this.sessionId,
             lat: pos.latitude,
             lng: pos.longitude,
@@ -463,7 +466,11 @@ class FlightPlanFollower {
       this.status = 'STARTING';
       await this._startSession(baseUrl, token);
       this._socket.emit('watch_session', { sessionId: this.sessionId });
-      console.log(`  ✈️  [${this._tag()}] Airborne  session=...${this.sessionId.slice(-6)}`);
+      // Also join mission room for dashboard watchers
+      if (this.missionId) {
+        this._socket.emit('watch_mission', { missionId: this.missionId });
+      }
+      console.log(`  ✈️  [${this._tag()}] Airborne  session=...${this.sessionId.slice(-6)}  mission=${this.missionId || 'N/A'}`);
 
       this.status = 'FLYING';
       await this._flyLoop();

@@ -113,7 +113,7 @@ function init(httpServer) {
     // Handle telemetry data
     socket.on("telemetry", async (msg) => {
       try {
-        const { droneId, sessionId, lat, lng, alt, speed, heading, batteryLevel, timestamp } = msg;
+        const { droneId, missionId, sessionId, lat, lng, alt, speed, heading, batteryLevel, timestamp } = msg;
         const telemetryTs = timestamp || Date.now();
 
         // ========== VALIDATION ==========
@@ -224,6 +224,30 @@ function init(httpServer) {
           ts: Date.now(),
         });
 
+        // ========== BROADCAST TELEMETRY TO SESSION WATCHERS ==========
+        // Re-broadcast to all clients watching this session room (dashboard)
+        const telemetryPayload = {
+          droneId,
+          missionId,
+          sessionId,
+          lat,
+          lng,
+          alt: alt || 0,
+          speed: speed || 0,
+          heading: heading || 0,
+          batteryLevel: batteryLevel || 0,
+          timestamp: telemetryTs,
+        };
+
+        if (sessionId) {
+          io.to(sessionId).emit("telemetry", telemetryPayload);
+        }
+
+        // Also broadcast to mission room for dashboard mission-level watchers
+        if (missionId) {
+          io.to(`mission:${missionId}`).emit("telemetry", telemetryPayload);
+        }
+
         // ========== ASYNC CONFLICT DETECTION (non-blocking) ==========
         if (sessionId) {
           triggerConflictCheck(sessionId, { lat, lng, alt: alt || 0, speed: speed || 0, heading: heading || 0, batteryLevel: batteryLevel || 0 })
@@ -253,6 +277,30 @@ function init(httpServer) {
         socket.watchingSession = sessionId; // Store the current watched session
 
         socket.emit("watching", { sessionId });
+      } catch (err) {
+        socket.emit("error", { message: err.message });
+      }
+    });
+
+    // Watch an entire mission - joins room "mission:<missionId>"
+    // This allows the dashboard to receive telemetry from ALL drones in the mission
+    socket.on("watch_mission", (msg) => {
+      try {
+        const { missionId } = msg;
+
+        if (!missionId) return;
+
+        // Leave previous mission room if watching one at a time
+        if (socket.watchingMission) {
+          socket.leave(`mission:${socket.watchingMission}`);
+        }
+
+        const roomName = `mission:${missionId}`;
+        socket.join(roomName);
+        socket.watchingMission = missionId;
+
+        console.log(`Socket [${socket.id}] watching mission: ${missionId}`);
+        socket.emit("watching_mission", { missionId });
       } catch (err) {
         socket.emit("error", { message: err.message });
       }

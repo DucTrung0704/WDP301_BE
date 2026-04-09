@@ -236,11 +236,12 @@ async function activateMissionIfNeeded(mission) {
 
 /**
  * Builds one FlightPlanFollower per valid mission plan.
+ * @param {string} missionId        - Mission ObjectId string
  * @param {Array}  missionPlans
  * @param {Map}    sharedPositions  - shared across all followers
  * @returns {FlightPlanFollower[]}
  */
-function buildFollowers(missionPlans, sharedPositions) {
+function buildFollowers(missionId, missionPlans, sharedPositions) {
   const followers = [];
 
   for (let idx = 0; idx < missionPlans.length; idx++) {
@@ -276,6 +277,7 @@ function buildFollowers(missionPlans, sharedPositions) {
     if (MODE === 'battery-drop' && idx !== missionPlans.length - 1) followerMode = 'normal';
 
     followers.push(new FlightPlanFollower({
+      missionId,
       droneId,
       flightPlanId: fp._id.toString(),
       waypoints: sortedWaypoints,
@@ -408,7 +410,7 @@ async function main() {
 
   // ── Build followers ───────────────────────────────────────────────────────
   console.log('\n🔧  Building followers...');
-  const followers = buildFollowers(missionPlans, sharedPositions);
+  const followers = buildFollowers(MISSION_ID, missionPlans, sharedPositions);
 
   if (followers.length === 0) {
     console.error('❌  No valid followers could be built (check waypoints and plan status).');
