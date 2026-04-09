@@ -14,6 +14,12 @@ router.post(
   controller.startMissionSimulation,
 );
 
+router.get(
+  "/missions/:id/status",
+  authorizeRoles("FLEET_OPERATOR", "UTM_ADMIN"),
+  controller.getMissionSimulationStatus,
+);
+
 router.post(
   "/:runId/stop",
   authorizeRoles("FLEET_OPERATOR", "UTM_ADMIN"),

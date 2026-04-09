@@ -90,3 +90,13 @@ exports.getSimulationStatus = async (req, res) => {
     return res.status(err.statusCode || 500).json(buildErrorResponse(err));
   }
 };
+
+exports.getMissionSimulationStatus = async (req, res) => {
+  try {
+    setSimulationResponseHeaders(res);
+    const result = simulationService.getMissionSimulationStatus(req.params.id, req.user);
+    return res.json(result);
+  } catch (err) {
+    return res.status(err.statusCode || 500).json(buildErrorResponse(err));
+  }
+};

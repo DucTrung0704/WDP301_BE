@@ -429,8 +429,35 @@ function getSimulationStatus(runId, actor) {
   return toPublicRun(run);
 }
 
+function getMissionSimulationStatus(missionId, actor) {
+  const missionRuns = Array.from(runs.values())
+    .filter((run) => run.missionId === missionId)
+    .filter((run) => actor.role === "UTM_ADMIN" || run.userId.toString() === actor.id.toString())
+    .sort((left, right) => new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime());
+
+  if (missionRuns.length === 0) {
+    return {
+      hasRun: false,
+      runId: null,
+      status: "NOT_FOUND",
+      run: null,
+    };
+  }
+
+  const activeRun = missionRuns.find((run) => ["RUNNING", "STOPPING"].includes(run.status));
+  const selectedRun = activeRun || missionRuns[0];
+
+  return {
+    hasRun: true,
+    runId: selectedRun.runId,
+    status: selectedRun.status,
+    run: toPublicRun(selectedRun),
+  };
+}
+
 module.exports = {
   startMissionSimulation,
   stopSimulation,
   getSimulationStatus,
+  getMissionSimulationStatus,
 };

@@ -3,6 +3,53 @@
 
 /**
  * @swagger
+ * /api/simulations/missions/{id}/status:
+ *   get:
+ *     summary: Xem trạng thái simulation theo missionId
+ *     description: FE map có thể gọi API này bằng missionId để lấy run hiện tại mà không cần tự giữ runId
+ *     tags: [Simulation Control]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Mission ID
+ *     responses:
+ *       200:
+ *         description: Trả về run hiện tại hoặc run gần nhất của mission
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 hasRun:
+ *                   type: boolean
+ *                 runId:
+ *                   type: string
+ *                   nullable: true
+ *                 status:
+ *                   type: string
+ *                 run:
+ *                   allOf:
+ *                     - $ref: '#/components/schemas/SimulationRun'
+ *                   nullable: true
+ *             example:
+ *               hasRun: true
+ *               runId: "7c378e05-d425-4a57-8f35-067be573e8be"
+ *               status: "RUNNING"
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
  * /api/simulations/missions/{id}/start:
  *   post:
  *     summary: Bắt đầu simulation cho một mission
