@@ -3,10 +3,57 @@
 
 /**
  * @swagger
+ * /api/auth/register:
+ *   post:
+ *     summary: Đăng ký tài khoản local
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 minLength: 8
+ *               fullName:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *                 enum: [INDIVIDUAL_OPERATOR, FLEET_OPERATOR]
+ *             required:
+ *               - email
+ *               - password
+ *           example:
+ *             email: "user@example.com"
+ *             password: "password123"
+ *             fullName: "John Doe"
+ *             role: "INDIVIDUAL_OPERATOR"
+ *     responses:
+ *       201:
+ *         description: Đăng ký thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Dữ liệu không hợp lệ
+ *       409:
+ *         description: Email đã tồn tại
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
  * /api/auth/login:
  *   post:
  *     summary: Đăng nhập local account
- *     description: Chỉ cho phép local account đã xác minh email
+ *     description: Đăng nhập bằng email/password cho tài khoản local
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -43,322 +90,79 @@
  *             example:
  *               message: "Invalid credentials"
  *       403:
- *         description: Tài khoản bị vô hiệu hóa hoặc chưa xác minh email
+ *         description: Tài khoản bị vô hiệu hóa
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  *             example:
- *               message: "Email is not verified"
+ *               message: "Account disabled"
  *       500:
  *         description: Lỗi server
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
- *             example:
- *               message: "Login failed"
  */
 
 /**
  * @swagger
  * /api/auth/logout:
  *   post:
- *     summary: Đăng xuất khỏi hệ thống (xóa tất cả refresh tokens)
- *     description: Xóa tất cả refresh tokens của user khỏi cơ sở dữ liệu, vô hiệu hóa toàn bộ phiên
+ *     summary: Đăng xuất khỏi hệ thống
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Đăng xuất thành công, tất cả refresh tokens đã bị xóa
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Logged out successfully"
- *       401:
- *         description: Chưa được xác thực (JWT token không hợp lệ hoặc hết hạn)
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *             example:
- *               message: "Unauthorized"
- *       500:
- *         description: Lỗi server
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *             example:
- *               message: "Logout failed"
- */
-
-/**
- * @swagger
- * tags:
- *   - name: Simulation Control
- *     description: Điều khiển Fleet Mission Simulator qua REST cho FE
- */
-
-/**
- * @swagger
- * /api/simulations/missions/{id}/start:
- *   post:
- *     summary: Khởi chạy fleet mission simulator cho một mission
- *     description: |
- *       Start simulator process ở backend để FE không cần chạy lệnh tay.
- *       Backend sẽ tự spawn script simulate-mission.js với JWT của request hiện tại.
- *     tags: [Simulation Control]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: MongoDB ObjectId của mission cần mô phỏng
- *         example: 67f3b5f91c2b6c2d5fb92410
  *     requestBody:
  *       required: false
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/SimulationStartRequest'
- *           example:
- *             mode: normal
- *             timeScale: 10
- *             tickMs: 1000
- *             skipSafetyCheck: false
+ *             type: object
+ *             properties:
+ *               refreshToken:
+ *                 type: string
  *     responses:
- *       202:
- *         description: Simulation được tạo thành công
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Simulation started
- *                 run:
- *                   $ref: '#/components/schemas/SimulationRun'
+ *       200:
+ *         description: Đăng xuất thành công
  *       401:
- *         description: Thiếu hoặc sai Bearer token
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       403:
- *         description: Không đủ quyền để chạy simulator
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       409:
- *         description: Mission này đã có một simulation đang chạy cho user hiện tại
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ *         description: Chưa xác thực
  *       500:
- *         description: Lỗi server khi khởi tạo process simulator
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ *         description: Lỗi server
  */
 
 /**
  * @swagger
- * /api/simulations/{runId}/stop:
+ * /api/auth/refresh:
  *   post:
- *     summary: Dừng simulation đang chạy
- *     tags: [Simulation Control]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: runId
- *         required: true
- *         schema:
- *           type: string
- *         description: UUID của simulation run
- *         example: 1d86a0ea-d4ba-4ca8-8d14-f5a33da5b98f
- *     responses:
- *       200:
- *         description: Yêu cầu dừng simulation đã được ghi nhận
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Stopping simulation
- *                 run:
- *                   $ref: '#/components/schemas/SimulationRun'
- *       403:
- *         description: Không có quyền dừng run này
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Không tìm thấy simulation run
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-
-/**
- * @swagger
- * /api/simulations/{runId}/status:
- *   get:
- *     summary: Lấy trạng thái và log của simulation run
- *     tags: [Simulation Control]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: runId
- *         required: true
- *         schema:
- *           type: string
- *         description: UUID của simulation run
- *         example: 1d86a0ea-d4ba-4ca8-8d14-f5a33da5b98f
- *     responses:
- *       200:
- *         description: Trạng thái hiện tại của simulation run
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 run:
- *                   $ref: '#/components/schemas/SimulationRun'
- *       403:
- *         description: Không có quyền xem run này
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Không tìm thấy simulation run
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-
-/**
- * @swagger
- * tags:
- *   - name: Admin
- *     description: Quản lý tài khoản (chỉ UTM_ADMIN)
- *   - name: Users
- *     description: Quản lý tài khoản công khai và cá nhân (Admin CRUD & User Profile)
- */
-
-/**
- * @swagger
- * /api/admin/users:
- *   get:
- *     summary: Danh sách tất cả người dùng (chỉ UTM_ADMIN)
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Success
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/AuthResponse'
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       403:
- *         description: Forbidden
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *
- *   post:
- *     summary: Tạo mới người dùng (chỉ UTM_ADMIN)
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
+ *     summary: Lấy access token mới bằng refresh token
+ *     tags: [Authentication]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [email, password, fullName]
  *             properties:
- *               fullName:
+ *               refreshToken:
  *                 type: string
- *                 example: "userthul"
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "userthul@gmail.com"
- *               password:
- *                 type: string
- *                 format: password
- *                 example: "123456"
- *               role:
- *                 type: string
- *                 enum: [INDIVIDUAL_OPERATOR, FLEET_OPERATOR]
- *                 example: "FLEET_OPERATOR"
- *               status:
- *                 type: string
- *                 enum: [active, inactive, banned]
- *                 example: "active"
+ *             required:
+ *               - refreshToken
  *     responses:
- *       201:
- *         description: Người dùng được tạo thành công
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AuthResponse'
- *             example:
- *               data:
- *                 user:
- *                   _id: "696f32e9bd108ced66f635e0"
- *                   email: "userthul@gmail.com"
- *                   password: "$2b$10$2UEzp14XRYov8xQ5ky0hm.BfGkt2Yk2mP5UBXqPd4KDnke3FzSu30"
- *                   profile:
- *                     fullName: "userthul"
- *                   providers:
- *                     local: true
- *                   role: "FLEET_OPERATOR"
- *                   status: "active"
- *                   createdAt: "2026-01-20T07:46:49.5362"
- *                   updatedAt: "2026-01-20T07:46:49.5362"
- *                   __v: 0
+ *       200:
+ *         description: Trả về access token mới
  *       400:
- *         description: Bad request - Thiếu thông tin bắt buộc
+ *         description: Thiếu refresh token
  *       401:
- *         description: Unauthorized - Không được xác thực
+ *         description: Refresh token không hợp lệ hoặc hết hạn
  *       403:
- *         description: Forbidden - Chỉ UTM_ADMIN mới được tạo user
- *       409:
- *         description: Conflict - Email đã tồn tại
- *
+ *         description: Tài khoản bị vô hiệu hóa
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
  * /api/admin/users/{id}:
  *   get:
  *     summary: Xem chi tiết người dùng (chỉ UTM_ADMIN)
@@ -451,6 +255,174 @@
  *         description: Forbidden
  *       404:
  *         description: Not found
+ */
+
+/**
+ * @swagger
+ * /api/admin/analytics/drones:
+ *   get:
+ *     summary: Thống kê tổng số drone và danh sách drone toàn hệ thống
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lấy thống kê drone thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalDrones:
+ *                       type: number
+ *                     byOwnerType:
+ *                       type: object
+ *                       properties:
+ *                         INDIVIDUAL:
+ *                           type: number
+ *                         FLEET:
+ *                           type: number
+ *                     drones:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           droneId:
+ *                             type: string
+ *                           serialNumber:
+ *                             type: string
+ *                           model:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           ownerType:
+ *                             type: string
+ *                           status:
+ *                             type: string
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                           owner:
+ *                             type: object
+ *                             nullable: true
+ *                             properties:
+ *                               _id:
+ *                                 type: string
+ *                               fullName:
+ *                                 type: string
+ *                                 nullable: true
+ *                               email:
+ *                                 type: string
+ *                               role:
+ *                                 type: string
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/admin/analytics/fleet-operators:
+ *   get:
+ *     summary: Danh sách Fleet Operator đã thanh toán và tổng số tiền đã chi
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách Fleet Operator đã thanh toán thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalPaidFleetOperators:
+ *                       type: number
+ *                     operators:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           email:
+ *                             type: string
+ *                           fullName:
+ *                             type: string
+ *                           role:
+ *                             type: string
+ *                           totalSpent:
+ *                             type: number
+ *                           successfulPaymentCount:
+ *                             type: number
+ *                           firstPaymentAt:
+ *                             type: string
+ *                             format: date-time
+ *                           lastPaymentAt:
+ *                             type: string
+ *                             format: date-time
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       500:
+ *         description: Lỗi server
+ */
+
+/**
+ * @swagger
+ * /api/admin/analytics/revenue:
+ *   get:
+ *     summary: Thống kê doanh thu theo tháng, quý, năm
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lấy thống kê doanh thu thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     monthly:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                     quarterly:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                     yearly:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       500:
+ *         description: Lỗi server
  */
 
 /**
@@ -3617,634 +3589,3 @@
  *         description: Lỗi server
  */
 
-/**
- * @swagger
- * /api/auth/google:
- *   post:
- *     summary: Đăng nhập/Đăng ký với Google
- *     description: |
- *       Xác thực tài khoản Google. Nếu email chưa verify, trả về 202 với cờ requiresEmailVerification.
- *       Sau đó dùng endpoint verify-email để confirm mã OTP.
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               idToken:
- *                 type: string
- *                 description: Google ID Token từ Google OAuth2
- *             required:
- *               - idToken
- *           example:
- *             idToken: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
- *     responses:
- *       200:
- *         description: Đăng nhập thành công (email đã verified)
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 token:
- *                   type: string
- *                 refreshToken:
- *                   type: string
- *                 user:
- *                   type: object
- *                   properties:
- *                     _id:
- *                       type: string
- *                     email:
- *                       type: string
- *                     profile:
- *                       type: object
- *                       properties:
- *                         fullName:
- *                           type: string
- *                     role:
- *                       type: string
- *                     status:
- *                       type: string
- *             example:
- *               token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
- *               refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
- *               user:
- *                 _id: "507f1f77bcf86cd799439011"
- *                 email: "user@example.com"
- *                 profile:
- *                   fullName: "John Doe"
- *                 role: "INDIVIDUAL_OPERATOR"
- *                 status: "active"
- *       202:
- *         description: Email chưa verify - cần confirm OTP
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 requiresEmailVerification:
- *                   type: boolean
- *                   example: true
- *                 email:
- *                   type: string
- *                 message:
- *                   type: string
- *             example:
- *               requiresEmailVerification: true
- *               email: "user@example.com"
- *               message: "Verification code sent to your email"
- *       400:
- *         description: Thiếu Google token
- *       500:
- *         description: Lỗi server
- */
-
-/**
- * @swagger
- * /api/auth/google/verify-email:
- *   post:
- *     summary: Xác thực email với mã OTP cho Google signup
- *     description: Validate mã xác thực (6 chữ số) gửi qua email, sau đó issue JWT tokens
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *               code:
- *                 type: string
- *                 description: Mã OTP gồm 6 chữ số
- *             required:
- *               - email
- *               - code
- *           example:
- *             email: "user@example.com"
- *             code: "123456"
- *     responses:
- *       200:
- *         description: Email verified thành công, token được issued
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 token:
- *                   type: string
- *                 refreshToken:
- *                   type: string
- *                 user:
- *                   type: object
- *             example:
- *               token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
- *               refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
- *               user:
- *                 _id: "507f1f77bcf86cd799439011"
- *                 email: "user@example.com"
- *                 profile:
- *                   fullName: "John Doe"
- *       400:
- *         description: Mã OTP không hợp lệ hoặc hết hạn (10 phút)
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *             example:
- *               message: "Invalid or expired verification code"
- *       404:
- *         description: Email không tồn tại
- *       500:
- *         description: Lỗi server
- */
-
-/**
- * @swagger
- * /api/auth/google/resend-code:
- *   post:
- *     summary: Gửi lại mã OTP cho xác thực email Google
- *     description: Gửi lại mã OTP nếu không nhận được hoặc hết hạn (cooldown 60 giây)
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *             required:
- *               - email
- *           example:
- *             email: "user@example.com"
- *     responses:
- *       200:
- *         description: Mã OTP được gửi lại thành công
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *             example:
- *               message: "Verification code resent"
- *       429:
- *         description: Quá nhiều yêu cầu - vui lòng chờ 60 giây
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 retryAfterSeconds:
- *                   type: number
- *                   description: Giây cần chờ
- *             example:
- *               message: "Please wait before requesting a new verification code"
- *               retryAfterSeconds: 45
- *       404:
- *         description: Email không tồn tại
- *       500:
- *         description: Lỗi server
- */
-
-/**
- * @swagger
- * /api/auth/gmail/register:
- *   post:
- *     summary: Đăng ký bằng Gmail + mật khẩu và gửi mã OTP xác minh
- *     description: Tạo local account cho email @gmail.com, gửi mã OTP qua email và yêu cầu xác minh trước khi login. Nếu email đã tồn tại bằng Google OAuth, hệ thống sẽ link thêm local login vào cùng tài khoản.
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "example@gmail.com"
- *               password:
- *                 type: string
- *                 minLength: 8
- *                 example: "password123"
- *               fullName:
- *                 type: string
- *                 example: "John Doe"
- *               role:
- *                 type: string
- *                 enum: [INDIVIDUAL_OPERATOR, FLEET_OPERATOR]
- *                 example: "INDIVIDUAL_OPERATOR"
- *             required:
- *               - email
- *               - password
- *     responses:
- *       200:
- *         description: Đã link local login vào tài khoản hiện có (không cần verify thêm)
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 email:
- *                   type: string
- *                 linkedWithGoogle:
- *                   type: boolean
- *                 requiresEmailVerification:
- *                   type: boolean
- *             example:
- *               message: "Local login has been enabled for this Gmail account"
- *               email: "example@gmail.com"
- *               linkedWithGoogle: true
- *               requiresEmailVerification: false
- *       202:
- *         description: Đã gửi OTP xác minh qua email
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 email:
- *                   type: string
- *                 linkedWithGoogle:
- *                   type: boolean
- *                 requiresEmailVerification:
- *                   type: boolean
- *                 expiresInSeconds:
- *                   type: number
- *             example:
- *               message: "Verification code sent to your email"
- *               email: "example@gmail.com"
- *               linkedWithGoogle: false
- *               requiresEmailVerification: true
- *               expiresInSeconds: 600
- *       400:
- *         description: Input không hợp lệ hoặc email không phải Gmail
- *       409:
- *         description: Email đã tồn tại
- *       500:
- *         description: Lỗi server
- */
-
-/**
- * @swagger
- * /api/auth/gmail/verify-email:
- *   post:
- *     summary: Xác minh mã OTP cho Gmail register
- *     description: Verify mã OTP, kích hoạt account và trả về access token + refresh token
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *               code:
- *                 type: string
- *                 description: Mã OTP gồm 6 chữ số
- *             required:
- *               - email
- *               - code
- *           example:
- *             email: "example@gmail.com"
- *             code: "123456"
- *     responses:
- *       200:
- *         description: Xác minh thành công, token được cấp
- *       400:
- *         description: Mã OTP không hợp lệ hoặc hết hạn
- *       404:
- *         description: User không tồn tại
- *       500:
- *         description: Lỗi server
- */
-
-/**
- * @swagger
- * /api/auth/gmail/resend-code:
- *   post:
- *     summary: Gửi lại mã OTP xác minh cho Gmail register
- *     description: Gửi lại OTP với cooldown 60 giây
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *             required:
- *               - email
- *           example:
- *             email: "example@gmail.com"
- *     responses:
- *       200:
- *         description: OTP đã được gửi lại
- *       400:
- *         description: Input không hợp lệ
- *       404:
- *         description: User không tồn tại
- *       429:
- *         description: Quá giới hạn gửi lại, cần chờ
- *       500:
- *         description: Lỗi server
- */
-
-/**
- * @swagger
- * /api/auth/gmail/forgot-password/request:
- *   post:
- *     summary: Gmail forgot password - gửi mã OTP
- *     description: Gửi mã OTP đặt lại mật khẩu cho tài khoản Gmail đã đăng ký local login
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *             required:
- *               - email
- *           example:
- *             email: "example@gmail.com"
- *     responses:
- *       200:
- *         description: Mã OTP đã được gửi
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 email:
- *                   type: string
- *                 expiresInSeconds:
- *                   type: number
- *             example:
- *               message: "Reset code sent to your email"
- *               email: "example@gmail.com"
- *               expiresInSeconds: 600
- *       400:
- *         description: Input không hợp lệ hoặc tài khoản không thuộc Gmail method
- *       404:
- *         description: User không tồn tại
- *       429:
- *         description: Quá nhiều yêu cầu
- *       500:
- *         description: Lỗi server
- */
-
-/**
- * @swagger
- * /api/auth/gmail/forgot-password/resend-code:
- *   post:
- *     summary: Gmail forgot password - gửi lại mã OTP
- *     description: Gửi lại mã OTP đặt lại mật khẩu cho tài khoản Gmail (cooldown 60 giây)
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *             required:
- *               - email
- *           example:
- *             email: "example@gmail.com"
- *     responses:
- *       200:
- *         description: Mã OTP đã được gửi
- *       400:
- *         description: Input không hợp lệ hoặc tài khoản không thuộc Gmail method
- *       404:
- *         description: User không tồn tại
- *       429:
- *         description: Quá nhiều yêu cầu
- *       500:
- *         description: Lỗi server
- */
-
-/**
- * @swagger
- * /api/auth/gmail/forgot-password/reset:
- *   post:
- *     summary: Gmail forgot password - đặt lại mật khẩu bằng OTP
- *     description: Validate OTP và cập nhật mật khẩu mới cho tài khoản Gmail local login
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *               code:
- *                 type: string
- *               newPassword:
- *                 type: string
- *                 minLength: 8
- *             required:
- *               - email
- *               - code
- *               - newPassword
- *           example:
- *             email: "example@gmail.com"
- *             code: "123456"
- *             newPassword: "NewPassword123"
- *     responses:
- *       200:
- *         description: Đặt lại mật khẩu thành công
- *       400:
- *         description: OTP không hợp lệ/hết hạn hoặc input không hợp lệ
- *       404:
- *         description: User không tồn tại
- *       500:
- *         description: Lỗi server
- */
-
-/**
- * @swagger
- * /api/auth/forgot-password/request:
- *   post:
- *     summary: Yêu cầu đặt lại password - gửi mã OTP qua email
- *     description: |
- *       Gửi mã OTP đặt lại password để email người dùng.
- *       Phản hồi an toàn (không lộ tồn tại của tài khoản).
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *             required:
- *               - email
- *           example:
- *             email: "user@example.com"
- *     responses:
- *       200:
- *         description: Email gửi thành công (hoặc email không tồn tại - response an toàn)
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *             example:
- *               message: "If the email exists, a reset code has been sent"
- *       429:
- *         description: Quá nhiều yêu cầu - chờ 60 giây
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 retryAfterSeconds:
- *                   type: number
- *             example:
- *               message: "Please wait before requesting another reset code"
- *               retryAfterSeconds: 45
- *       500:
- *         description: Lỗi server
- */
-
-/**
- * @swagger
- * /api/auth/forgot-password/resend-code:
- *   post:
- *     summary: Gửi lại mã OTP đặt lại password
- *     description: Gửi lại mã nếu không nhận được (cooldown 60 giây)
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *             required:
- *               - email
- *           example:
- *             email: "user@example.com"
- *     responses:
- *       200:
- *         description: Mã được gửi lại (hoặc email không tồn tại - response an toàn)
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *             example:
- *               message: "If the email exists, a reset code has been sent"
- *       429:
- *         description: Quá nhiều yêu cầu - chờ 60 giây
- *       500:
- *         description: Lỗi server
- */
-
-/**
- * @swagger
- * /api/auth/forgot-password/reset:
- *   post:
- *     summary: Đặt lại password với mã OTP
- *     description: |
- *       Validate mã OTP + Password mới (minimum 8 ký tự).
- *       Sau khi thành công, tất cả refresh tokens bị xóa (logout khỏi tất cả devices).
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *               code:
- *                 type: string
- *                 description: Mã OTP từ email (6 chữ số)
- *               newPassword:
- *                 type: string
- *                 description: Password mới (minimum 8 ký tự)
- *             required:
- *               - email
- *               - code
- *               - newPassword
- *           example:
- *             email: "user@example.com"
- *             code: "123456"
- *             newPassword: "NewPassword123!"
- *     responses:
- *       200:
- *         description: Password đặt lại thành công, đã logout khỏi tất cả devices
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *             example:
- *               message: "Password reset successful"
- *       400:
- *         description: Mã không hợp lệ, password yếu, hoặc mã hết hạn (10 phút)
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *             example:
- *               message: "Invalid reset code"
- *       404:
- *         description: Email không tồn tại
- *       500:
- *         description: Lỗi server
- */

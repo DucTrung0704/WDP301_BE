@@ -6,7 +6,6 @@ const { OAuth2Client } = require("google-auth-library");
 const {
     sendGoogleVerificationCodeEmail,
     sendRegisterVerificationCodeEmail,
-    sendPasswordResetCodeEmail,
 } = require("../services/email.service");
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -14,8 +13,6 @@ const GOOGLE_VERIFY_CODE_TTL_MS = 10 * 60 * 1000;
 const GOOGLE_VERIFY_RESEND_COOLDOWN_MS = 60 * 1000;
 const GMAIL_REGISTER_VERIFY_CODE_TTL_MS = 10 * 60 * 1000;
 const GMAIL_REGISTER_RESEND_COOLDOWN_MS = 60 * 1000;
-const PASSWORD_RESET_CODE_TTL_MS = 10 * 60 * 1000;
-const PASSWORD_RESET_RESEND_COOLDOWN_MS = 60 * 1000;
 
 function generateVerificationCode() {
     return Math.floor(100000 + Math.random() * 900000).toString();
@@ -128,7 +125,9 @@ exports.registerWithGmailVerification = async (req, res) => {
             });
 
             if (!sent) {
-                return res.status(500).json({ message: "Failed to send verification code" });
+                return res.status(502).json({
+                    message: "Failed to send verification code. Please verify email provider settings",
+                });
             }
 
             await existingUser.save();
@@ -165,7 +164,9 @@ exports.registerWithGmailVerification = async (req, res) => {
 
         if (!sent) {
             await User.findByIdAndDelete(user._id);
-            return res.status(500).json({ message: "Failed to send verification code" });
+            return res.status(502).json({
+                message: "Failed to send verification code. Please verify email provider settings",
+            });
         }
 
         return res.status(202).json({
@@ -547,260 +548,63 @@ exports.resendGoogleVerificationCode = async (req, res) => {
 };
 
 /**
- * GMAIL FORGOT PASSWORD - REQUEST CODE
- * Frontend gửi: { email }
+ * REGISTER
  */
-exports.requestGmailPasswordResetCode = async (req, res) => {
+exports.register = async (req, res) => {
     try {
         const email = (req.body.email || "").toLowerCase().trim();
-        if (!email) {
-            return res.status(400).json({ message: "email is required" });
+        const { password, fullName, role } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ message: "Missing fields" });
         }
 
-        if (!isGmailAddress(email)) {
-            return res.status(400).json({ message: "Only Gmail addresses are allowed for this method" });
+        if (!isStrongPassword(password)) {
+            return res.status(400).json({ message: "password must be at least 8 characters" });
         }
 
-        const user = await User.findOne({ email }).select("+passwordReset.code +passwordReset.codeExpiresAt");
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(409).json({ message: "Email already exists" });
         }
 
-        if (!user.providers?.local) {
-            return res.status(400).json({ message: "This account is not registered with Gmail method" });
+        const allowedRoles = ["INDIVIDUAL_OPERATOR", "FLEET_OPERATOR"];
+        let userRole = "INDIVIDUAL_OPERATOR";
+        if (role) {
+            if (!allowedRoles.includes(role)) {
+                return res.status(400).json({
+                    message:
+                        "Invalid role. Allowed: INDIVIDUAL_OPERATOR, FLEET_OPERATOR",
+                });
+            }
+            userRole = role;
         }
 
-        const lastSentAt = user.passwordReset?.lastSentAt
-            ? new Date(user.passwordReset.lastSentAt).getTime()
-            : 0;
-        const now = Date.now();
-        const cooldownRemainingMs = PASSWORD_RESET_RESEND_COOLDOWN_MS - (now - lastSentAt);
+        const hashedPassword = await bcrypt.hash(password, 10);
 
-        if (cooldownRemainingMs > 0) {
-            return res.status(429).json({
-                message: "Please wait before requesting another reset code",
-                retryAfterSeconds: Math.ceil(cooldownRemainingMs / 1000),
-            });
-        }
-
-        const code = generateVerificationCode();
-        user.passwordReset = {
-            ...(user.passwordReset || {}),
-            code,
-            codeExpiresAt: new Date(now + PASSWORD_RESET_CODE_TTL_MS),
-            lastSentAt: new Date(now),
-        };
-
-        const sent = await sendPasswordResetCodeEmail({
-            to: user.email,
-            fullName: user.profile?.fullName,
-            code,
+        const user = await User.create({
+            email,
+            password: hashedPassword,
+            providers: { local: true },
+            profile: fullName ? { fullName } : {},
+            role: userRole,
+            status: "active",
+            emailVerification: {
+                isVerified: true,
+                code: undefined,
+                codeExpiresAt: undefined,
+                lastSentAt: undefined,
+            },
         });
 
-        if (!sent) {
-            return res.status(500).json({ message: "Failed to send reset code" });
-        }
-
+        user.lastLoginAt = new Date();
+        const { token, refreshToken } = issueAuthTokens(user);
         await user.save();
 
-        return res.status(200).json({
-            message: "Reset code sent to your email",
-            email: user.email,
-            expiresInSeconds: Math.floor(PASSWORD_RESET_CODE_TTL_MS / 1000),
-        });
+        return res.status(201).json({ token, refreshToken, user });
     } catch (err) {
-        console.error("Request Gmail password reset code error:", err);
-        return res.status(500).json({ message: "Request reset code failed" });
-    }
-};
-
-/**
- * GMAIL FORGOT PASSWORD - RESEND CODE
- * Frontend gửi: { email }
- */
-exports.resendGmailPasswordResetCode = async (req, res) => {
-    return exports.requestGmailPasswordResetCode(req, res);
-};
-
-/**
- * GMAIL FORGOT PASSWORD - RESET PASSWORD
- * Frontend gửi: { email, code, newPassword }
- */
-exports.resetGmailPasswordWithCode = async (req, res) => {
-    try {
-        const email = (req.body.email || "").toLowerCase().trim();
-        const code = String(req.body.code || "").trim();
-        const { newPassword } = req.body;
-
-        if (!email || !code || !newPassword) {
-            return res.status(400).json({ message: "email, code and newPassword are required" });
-        }
-
-        if (!isGmailAddress(email)) {
-            return res.status(400).json({ message: "Only Gmail addresses are allowed for this method" });
-        }
-
-        if (!isStrongPassword(newPassword)) {
-            return res.status(400).json({ message: "newPassword must be at least 8 characters" });
-        }
-
-        const user = await User.findOne({ email }).select("+passwordReset.code +passwordReset.codeExpiresAt");
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
-
-        if (!user.providers?.local) {
-            return res.status(400).json({ message: "This account is not registered with Gmail method" });
-        }
-
-        const passwordReset = user.passwordReset || {};
-        if (!passwordReset.code || passwordReset.code !== code) {
-            return res.status(400).json({ message: "Invalid reset code" });
-        }
-
-        if (!passwordReset.codeExpiresAt || new Date(passwordReset.codeExpiresAt).getTime() < Date.now()) {
-            return res.status(400).json({ message: "Reset code expired" });
-        }
-
-        user.password = await bcrypt.hash(newPassword, 10);
-        user.passwordReset = {
-            code: undefined,
-            codeExpiresAt: undefined,
-            lastSentAt: undefined,
-        };
-
-        // Invalidate old sessions after password reset
-        user.refreshTokens = [];
-        await user.save();
-
-        return res.status(200).json({ message: "Password reset successful" });
-    } catch (err) {
-        console.error("Reset Gmail password with code error:", err);
-        return res.status(500).json({ message: "Reset password failed" });
-    }
-};
-
-/**
- * FORGOT PASSWORD - REQUEST CODE
- * Frontend gửi: { email }
- */
-exports.requestPasswordResetCode = async (req, res) => {
-    try {
-        const email = (req.body.email || "").toLowerCase().trim();
-        if (!email) {
-            return res.status(400).json({ message: "email is required" });
-        }
-
-        const user = await User.findOne({ email }).select("+passwordReset.code +passwordReset.codeExpiresAt");
-
-        // Do not reveal account existence
-        if (!user) {
-            return res.status(200).json({
-                message: "If the email exists, a reset code has been sent",
-            });
-        }
-
-        const lastSentAt = user.passwordReset?.lastSentAt
-            ? new Date(user.passwordReset.lastSentAt).getTime()
-            : 0;
-        const now = Date.now();
-        const cooldownRemainingMs = PASSWORD_RESET_RESEND_COOLDOWN_MS - (now - lastSentAt);
-
-        if (cooldownRemainingMs > 0) {
-            return res.status(429).json({
-                message: "Please wait before requesting another reset code",
-                retryAfterSeconds: Math.ceil(cooldownRemainingMs / 1000),
-            });
-        }
-
-        const code = generateVerificationCode();
-        user.passwordReset = {
-            ...(user.passwordReset || {}),
-            code,
-            codeExpiresAt: new Date(now + PASSWORD_RESET_CODE_TTL_MS),
-            lastSentAt: new Date(now),
-        };
-
-        const sent = await sendPasswordResetCodeEmail({
-            to: user.email,
-            fullName: user.profile?.fullName,
-            code,
-        });
-
-        if (!sent) {
-            return res.status(500).json({ message: "Failed to send reset code" });
-        }
-
-        await user.save();
-
-        return res.status(200).json({
-            message: "If the email exists, a reset code has been sent",
-            expiresInSeconds: Math.floor(PASSWORD_RESET_CODE_TTL_MS / 1000),
-        });
-    } catch (err) {
-        console.error("Request password reset code error:", err);
-        return res.status(500).json({ message: "Request reset code failed" });
-    }
-};
-
-/**
- * FORGOT PASSWORD - RESEND CODE
- * Frontend gửi: { email }
- */
-exports.resendPasswordResetCode = async (req, res) => {
-    // Reuse request flow so behavior and anti-spam are consistent
-    return exports.requestPasswordResetCode(req, res);
-};
-
-/**
- * FORGOT PASSWORD - RESET PASSWORD
- * Frontend gửi: { email, code, newPassword }
- */
-exports.resetPasswordWithCode = async (req, res) => {
-    try {
-        const email = (req.body.email || "").toLowerCase().trim();
-        const code = String(req.body.code || "").trim();
-        const { newPassword } = req.body;
-
-        if (!email || !code || !newPassword) {
-            return res.status(400).json({ message: "email, code and newPassword are required" });
-        }
-
-        if (!isStrongPassword(newPassword)) {
-            return res.status(400).json({ message: "newPassword must be at least 8 characters" });
-        }
-
-        const user = await User.findOne({ email }).select("+passwordReset.code +passwordReset.codeExpiresAt");
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
-
-        const passwordReset = user.passwordReset || {};
-        if (!passwordReset.code || passwordReset.code !== code) {
-            return res.status(400).json({ message: "Invalid reset code" });
-        }
-
-        if (!passwordReset.codeExpiresAt || new Date(passwordReset.codeExpiresAt).getTime() < Date.now()) {
-            return res.status(400).json({ message: "Reset code expired" });
-        }
-
-        user.password = await bcrypt.hash(newPassword, 10);
-        user.providers = user.providers || {};
-        user.providers.local = true;
-        user.passwordReset = {
-            code: undefined,
-            codeExpiresAt: undefined,
-            lastSentAt: undefined,
-        };
-
-        // Invalidate old sessions after password reset
-        user.refreshTokens = [];
-        await user.save();
-
-        return res.status(200).json({ message: "Password reset successful" });
-    } catch (err) {
-        console.error("Reset password with code error:", err);
-        return res.status(500).json({ message: "Reset password failed" });
+        console.error("Register error:", err);
+        return res.status(500).json({ message: "Register failed" });
     }
 };
 
@@ -829,15 +633,6 @@ exports.login = async (req, res) => {
 
         if (user.status !== "active") {
             return res.status(403).json({ message: "Account disabled" });
-        }
-
-        const isEmailVerified = user.emailVerification?.isVerified !== false;
-        if (!isEmailVerified) {
-            return res.status(403).json({
-                message: "Email is not verified",
-                requiresEmailVerification: true,
-                email: user.email,
-            });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
