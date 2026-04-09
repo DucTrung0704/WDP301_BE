@@ -497,8 +497,8 @@ function deriveMissionStatusFromPlans(plans, activeSessionCount) {
   };
 }
 
-async function buildDatabaseRunSnapshot(missionId, planIds) {
-  if (!Array.isArray(planIds) || planIds.length === 0) {
+async function buildDatabaseRunSnapshot(missionId, plans) {
+  if (!Array.isArray(plans) || plans.length === 0) {
     return {
       source: "DATABASE",
       missionId,
@@ -506,15 +506,30 @@ async function buildDatabaseRunSnapshot(missionId, planIds) {
     };
   }
 
-  const sessions = await FlightSession.find({ missionPlan: { $in: planIds } })
+  const planIds = plans.map((plan) => plan._id).filter(Boolean);
+  const flightPlanIds = plans.map((plan) => plan.flightPlan).filter(Boolean);
+
+  const sessions = await FlightSession.find({
+    $or: [
+      { missionPlan: { $in: planIds } },
+      { flightPlan: { $in: flightPlanIds } },
+    ],
+  })
     .select("_id missionPlan drone status actualStart actualEnd createdAt")
+    .populate("flightPlan", "_id")
     .populate("drone", "droneId status")
     .sort({ createdAt: -1 })
     .lean();
 
+  const planIdByFlightPlanId = new Map(
+    plans.map((plan) => [String(plan.flightPlan), String(plan._id)]),
+  );
+
   const latestSessionByPlan = new Map();
   sessions.forEach((session) => {
-    const key = session.missionPlan?.toString();
+    const key =
+      session.missionPlan?.toString() ||
+      planIdByFlightPlanId.get(String(session.flightPlan?._id || session.flightPlan));
     if (!key || latestSessionByPlan.has(key)) return;
     latestSessionByPlan.set(key, session);
   });
@@ -552,6 +567,10 @@ async function buildDatabaseRunSnapshot(missionId, planIds) {
 
     return {
       missionPlanId: session.missionPlan,
+      resolvedMissionPlanId:
+        session.missionPlan ||
+        planIdByFlightPlanId.get(String(session.flightPlan?._id || session.flightPlan)) ||
+        null,
       flightSessionId: session._id,
       sessionStatus: session.status,
       actualStart: session.actualStart,
@@ -620,7 +639,7 @@ async function getMissionSimulationStatus(missionId, actor) {
       throw makeError("Forbidden: not your mission", 403);
     }
 
-    const plans = await MissionPlan.find({ mission: missionId }).select("_id status");
+    const plans = await MissionPlan.find({ mission: missionId }).select("_id status flightPlan");
     if (plans.length === 0) {
       return {
         hasRun: false,
@@ -632,12 +651,15 @@ async function getMissionSimulationStatus(missionId, actor) {
 
     const planIds = plans.map((plan) => plan._id);
     const activeSessionCount = await FlightSession.countDocuments({
-      missionPlan: { $in: planIds },
+      $or: [
+        { missionPlan: { $in: planIds } },
+        { flightPlan: { $in: plans.map((plan) => plan.flightPlan).filter(Boolean) } },
+      ],
       status: { $in: ["STARTING", "IN_PROGRESS"] },
     });
 
     const derived = deriveMissionStatusFromPlans(plans, activeSessionCount);
-    const runSnapshot = await buildDatabaseRunSnapshot(missionId, planIds);
+    const runSnapshot = await buildDatabaseRunSnapshot(missionId, plans);
 
     return {
       ...derived,
@@ -648,9 +670,8 @@ async function getMissionSimulationStatus(missionId, actor) {
   const activeRun = missionRuns.find((run) => ["RUNNING", "STOPPING"].includes(run.status));
   const selectedRun = activeRun || missionRuns[0];
 
-  const plans = await MissionPlan.find({ mission: missionId }).select("_id");
-  const planIds = plans.map((plan) => plan._id);
-  const runSnapshot = await buildDatabaseRunSnapshot(missionId, planIds);
+  const plans = await MissionPlan.find({ mission: missionId }).select("_id flightPlan");
+  const runSnapshot = await buildDatabaseRunSnapshot(missionId, plans);
 
   return {
     hasRun: true,

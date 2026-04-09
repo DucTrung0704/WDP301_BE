@@ -280,6 +280,7 @@ function buildFollowers(missionId, missionPlans, sharedPositions) {
       missionId,
       droneId,
       flightPlanId: fp._id.toString(),
+      missionPlanId: mp._id?.toString?.() || null,
       waypoints: sortedWaypoints,
       plannedStart: mp.plannedStart,
       plannedEnd: mp.plannedEnd,

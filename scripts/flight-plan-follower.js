@@ -62,6 +62,7 @@ class FlightPlanFollower {
    * @param {string}  opts.missionId          - Mission ObjectId string
    * @param {string}  opts.droneId            - Drone ObjectId string (Redis key / telemetry droneId)
    * @param {string}  opts.flightPlanId       - FlightPlan ObjectId string
+    * @param {string}  [opts.missionPlanId]   - MissionPlan ObjectId string
    * @param {Array}   opts.waypoints          - Sorted waypoints [{sequenceNumber,latitude,longitude,altitude,speed}]
    * @param {Date}    opts.plannedStart       - Mission plan scheduled start
    * @param {Date}    opts.plannedEnd         - Mission plan scheduled end
@@ -78,6 +79,7 @@ class FlightPlanFollower {
     this.missionId = opts.missionId;
     this.droneId = opts.droneId;
     this.flightPlanId = opts.flightPlanId;
+    this.missionPlanId = opts.missionPlanId || null;
     this.waypoints = opts.waypoints;
     this.plannedStart = new Date(opts.plannedStart);
     this.plannedEnd = new Date(opts.plannedEnd);
@@ -271,10 +273,15 @@ class FlightPlanFollower {
 
   /** @private */
   async _startSession(baseUrl, token) {
+    const payload = {
+      flightPlanId: this.flightPlanId,
+      ...(this.missionPlanId ? { missionPlanId: this.missionPlanId } : {}),
+    };
+
     const res = await fetch(`${baseUrl}/api/flight-sessions/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ flightPlanId: this.flightPlanId }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: res.statusText }));
