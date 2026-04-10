@@ -19,8 +19,9 @@ const PaymentSchema = new mongoose.Schema({
         ref: "User"
     },
     package_id: {
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
         required: true,
+        ref: "Package"
     },
     status: {
         type: String,

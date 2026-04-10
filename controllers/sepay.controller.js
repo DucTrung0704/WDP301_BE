@@ -168,7 +168,7 @@ exports.webhook = async (req, res) => {
 exports.getPaymentHistory = async (req, res) => {
     try {
         const customer_id = req.user.id;
-        const payments = await PaymentModel.find({ customer_id: customer_id }).populate({ path: "customer_id", select: "profile email role" }).sort({ createdAt: -1 });
+        const payments = await PaymentModel.find({ customer_id: customer_id }).populate({ path: "customer_id", select: "profile email role" }).populate("package_id").sort({ createdAt: -1 });
 
         return res.status(200).json({
             success: true,
@@ -188,7 +188,7 @@ exports.getPaymentHistory = async (req, res) => {
 
 exports.getAllPayments = async (req, res) => {
     try {
-        const payments = await PaymentModel.find().populate({ path: "customer_id", select: "profile email role" }).sort({ createdAt: -1 });
+        const payments = await PaymentModel.find().populate({ path: "customer_id", select: "profile email role" }).populate("package_id").sort({ createdAt: -1 });
 
         return res.status(200).json({
             success: true,
